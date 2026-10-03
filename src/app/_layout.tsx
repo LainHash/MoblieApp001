@@ -1,18 +1,60 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { MaterialSymbols_400Regular, useFonts } from '@expo-google-fonts/material-symbols';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { ArtisanColors } from '@/constants/theme';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    MaterialSymbols_400Regular,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <View style={styles.root}>
+        <StatusBar style="dark" backgroundColor={ArtisanColors.surface} />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: 'slide_from_right',
+            contentStyle: { backgroundColor: ArtisanColors.background },
+          }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="menu" />
+          <Stack.Screen name="food-detail" />
+          <Stack.Screen name="cart" />
+          <Stack.Screen name="profile" />
+          <Stack.Screen name="edit-profile" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="register" />
+          <Stack.Screen name="otp" />
+          <Stack.Screen name="saved" />
+          <Stack.Screen name="orders" />
+        </Stack>
+      </View>
+    </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: ArtisanColors.background,
+  },
+});
