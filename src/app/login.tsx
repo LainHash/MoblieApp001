@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -13,15 +15,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
 import { ArtisanColors } from '@/constants/theme';
+import { useAuth } from '@/features/auth';
 
 export default function LoginScreen() {
-  const [username, setUsername] = useState('alex.morgan@artisankitchen.com');
-  const [password, setPassword] = useState('CulinaryArt2024!');
+  const { login, isLoading } = useAuth();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  const handleLogin = () => {
-    router.replace('/');
+  const handleLogin = async () => {
+    if (!username.trim() || !password) {
+      Alert.alert('Thông báo', 'Vui lòng nhập email/tên đăng nhập và mật khẩu.');
+      return;
+    }
+
+    try {
+      await login({ identifier: username.trim(), password });
+      router.replace('/');
+    } catch (err) {
+      Alert.alert(
+        'Đăng nhập thất bại',
+        err instanceof Error ? err.message : 'Tài khoản hoặc mật khẩu không chính xác.'
+      );
+    }
   };
 
   return (
@@ -125,10 +142,21 @@ export default function LoginScreen() {
           {/* Primary Submit CTA */}
           <Pressable
             accessibilityRole="button"
+            disabled={isLoading}
             onPress={handleLogin}
-            style={({ pressed }) => [styles.submitBtn, pressed && styles.pressed]}>
-            <Text style={styles.submitBtnText}>Đăng nhập</Text>
-            <Icon name="arrow_forward" size={18} color="#ffffff" />
+            style={({ pressed }) => [
+              styles.submitBtn,
+              isLoading && { opacity: 0.7 },
+              pressed && styles.pressed,
+            ]}>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <>
+                <Text style={styles.submitBtnText}>Đăng nhập</Text>
+                <Icon name="arrow_forward" size={18} color="#ffffff" />
+              </>
+            )}
           </Pressable>
 
           {/* Divider */}

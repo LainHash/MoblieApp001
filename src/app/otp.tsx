@@ -1,6 +1,8 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -12,10 +14,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
 import { ArtisanColors } from '@/constants/theme';
+import { authService } from '@/features/auth';
 
 export default function OtpScreen() {
-  const [otp, setOtp] = useState(['4', '8', '2', '', '', '']);
+  const { email } = useLocalSearchParams<{ email?: string }>();
+  const targetEmail = email || 'alex.morgan@email.com';
+
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [countdown, setCountdown] = useState(45);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -44,8 +52,43 @@ export default function OtpScreen() {
     }
   };
 
-  const handleVerify = () => {
-    router.replace('/edit-profile');
+  const handleVerify = async () => {
+    const code = otp.join('');
+    if (code.length < 6) {
+      Alert.alert('Thông báo', 'Vui lòng nhập đủ 6 chữ số mã xác thực.');
+      return;
+    }
+
+    try {
+      setIsVerifying(true);
+      await authService.verifyEmail({ email: targetEmail, code });
+      Alert.alert('Thành công', 'Tài khoản đã được xác thực thành công! Hãy đăng nhập.', [
+        { text: 'Đăng nhập', onPress: () => router.replace('/login') },
+      ]);
+    } catch (err) {
+      Alert.alert(
+        'Xác thực thất bại',
+        err instanceof Error ? err.message : 'Mã OTP không hợp lệ hoặc đã hết hạn.'
+      );
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      setIsResending(true);
+      await authService.resendVerification(targetEmail);
+      setCountdown(60);
+      Alert.alert('Thành công', 'Mã xác thực mới đã được gửi tới email của bạn.');
+    } catch (err) {
+      Alert.alert(
+        'Gửi lại thất bại',
+        err instanceof Error ? err.message : 'Không thể gửi lại mã xác thực lúc này.'
+      );
+    } finally {
+      setIsResending(false);
+    }
   };
 
   const formatTimer = (sec: number) => {
@@ -98,7 +141,7 @@ export default function OtpScreen() {
 
           <View style={styles.emailPill}>
             <Icon name="mail" size={16} color={ArtisanColors.primary} />
-            <Text style={styles.emailText}>alex.morgan@email.com</Text>
+            <Text style={styles.emailText}>{targetEmail}</Text>
             <View style={styles.pillDot} />
             <Pressable onPress={() => router.back()}>
               <Text style={styles.changeEmailText}>Đổi email</Text>
@@ -139,8 +182,10 @@ export default function OtpScreen() {
               Gửi lại mã sau <Text style={styles.timerHighlight}>{formatTimer(countdown)}</Text>
             </Text>
           ) : (
-            <Pressable onPress={() => setCountdown(60)}>
-              <Text style={styles.resendText}>Chưa nhận được mã? Gửi lại ngay</Text>
+            <Pressable disabled={isResending} onPress={handleResend}>
+              <Text style={styles.resendText}>
+                {isResending ? 'Đang gửi lại mã...' : 'Chưa nhận được mã? Gửi lại ngay'}
+              </Text>
             </Pressable>
           )}
         </View>
@@ -148,10 +193,21 @@ export default function OtpScreen() {
         {/* Verify CTA Button */}
         <Pressable
           accessibilityRole="button"
+          disabled={isVerifying}
           onPress={handleVerify}
-          style={({ pressed }) => [styles.verifyBtn, pressed && styles.pressed]}>
-          <Text style={styles.verifyBtnText}>Xác thực ngay</Text>
-          <Icon name="arrow_forward" size={18} color="#ffffff" />
+          style={({ pressed }) => [
+            styles.verifyBtn,
+            isVerifying && { opacity: 0.7 },
+            pressed && styles.pressed,
+          ]}>
+          {isVerifying ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <>
+              <Text style={styles.verifyBtnText}>Xác thực ngay</Text>
+              <Icon name="arrow_forward" size={18} color="#ffffff" />
+            </>
+          )}
         </Pressable>
 
         {/* Numeric On-Screen Keypad for mobile ergonomics */}

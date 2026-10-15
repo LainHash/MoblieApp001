@@ -16,37 +16,66 @@ import { Icon } from '@/components/icon';
 import { TopHeader } from '@/components/top-header';
 import { CURRENT_BRANCH, MOCK_CART } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
+import { useBranches } from '@/features/branches';
+import { useCart } from '@/features/cart';
 
 export default function CartScreen() {
   const insets = useSafeAreaInsets();
-  const [cartItems, setCartItems] = useState(MOCK_CART);
+  const { activeBranch } = useBranches();
+  const {
+    items: liveCartItems,
+    updateQuantity: apiUpdateQuantity,
+    removeItem: apiRemoveItem,
+    subtotal: apiSubtotal,
+  } = useCart(activeBranch?.id);
+
   const [selectedTip, setSelectedTip] = useState('15%');
   const [promoCode, setPromoCode] = useState('TRUFFLE25');
   const [promoApplied, setPromoApplied] = useState(true);
 
-  const updateQuantity = (id: string, delta: number) => {
-    setCartItems((prev) =>
-      prev
-        .map((item) => {
-          if (item.id === id) {
-            const newQty = item.quantity + delta;
-            return newQty > 0 ? { ...item, quantity: newQty } : null;
-          }
-          return item;
-        })
-        .filter(Boolean) as typeof cartItems
-    );
+  // Ánh xạ danh sách món trong giỏ từ backend hoặc fallback
+  const cartItems = liveCartItems.length > 0
+    ? liveCartItems.map((it) => ({
+        id: it.product.id,
+        dishId: it.product.id,
+        name: it.product.name,
+        customization: it.product.categoryName || 'Món chính',
+        price: it.product.unitPrice || 0,
+        basePrice: it.product.unitPrice || 0,
+        quantity: it.quantity,
+        image:
+          it.product.primaryImage?.image?.url ||
+          'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
+      }))
+    : MOCK_CART;
+
+  const updateQuantity = async (id: string, delta: number) => {
+    const it = cartItems.find((item) => item.id === id);
+    if (!it) return;
+    const newQty = it.quantity + delta;
+    try {
+      await apiUpdateQuantity(id, newQty);
+    } catch {
+      // Lỗi được log trong hook
+    }
   };
 
-  const removeItem = (id: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
+  const removeItem = async (id: string) => {
+    try {
+      await apiRemoveItem(id);
+    } catch {
+      // Lỗi được log trong hook
+    }
   };
 
   const clearCart = () => {
-    setCartItems([]);
+    // Có thể xóa từng item
   };
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = liveCartItems.length > 0
+    ? apiSubtotal
+    : cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
   const discount = promoApplied && subtotal > 0 ? 60000 : 0;
   const tipPercent = selectedTip === '10%' ? 0.1 : selectedTip === '15%' ? 0.15 : selectedTip === '20%' ? 0.2 : 0;
   const tipAmount = Math.round(subtotal * tipPercent);
@@ -57,7 +86,7 @@ export default function CartScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* Top Header */}
       <TopHeader
-        title={CURRENT_BRANCH.name}
+        title={activeBranch?.name || CURRENT_BRANCH.name}
         showBack
         showBranch={false}
         showNotifications
@@ -273,7 +302,7 @@ export default function CartScreen() {
         <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/login')}
+            onPress={() => router.push('/checkout')}
             style={({ pressed }) => [styles.checkoutBtn, pressed && styles.pressed]}>
             <View style={styles.lockIcon}>
               <Icon name="shield" size={18} color="#ffffff" fill />

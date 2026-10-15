@@ -1,7 +1,9 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -15,98 +17,162 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '@/components/icon';
 import { MOCK_USER } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
+import { useUserProfile } from '@/features/user';
 
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { user, profile, isLoading, updateProfile } = useUserProfile();
+
   const [lastName, setLastName] = useState('Nguyễn Hoàng');
   const [firstName, setFirstName] = useState('Minh');
-  const [dob, setDob] = useState('1995-10-24');
+  const [username, setUsername] = useState('alexmorgan99');
+  const [email, setEmail] = useState('alex.morgan@email.com');
+  const [phone, setPhone] = useState('+84 908 123 456');
+  const [dob, setDob] = useState('24/10/1995');
   const [gender, setGender] = useState<'male' | 'female' | 'other'>('male');
-  const [phone, setPhone] = useState(MOCK_USER.phone);
-  const [address, setAddress] = useState(MOCK_USER.addresses[0]?.detail || '');
-  const [dietaryNotes, setDietaryNotes] = useState('Ít ngọt, không hành tây sống');
+  const [address, setAddress] = useState(
+    '128 Nguyễn Du, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh'
+  );
+  const [isDefaultAddress, setIsDefaultAddress] = useState(true);
 
-  const handleSave = () => {
-    router.replace('/profile');
+  useEffect(() => {
+    let ignore = false;
+    async function populate() {
+      if (ignore) return;
+      if (user) {
+        if (user.userName) setUsername(user.userName);
+        if (user.email) setEmail(user.email);
+      }
+      if (profile) {
+        if (profile.firstName) setFirstName(profile.firstName);
+        if (profile.lastName) setLastName(profile.lastName);
+        if (profile.phone) setPhone(profile.phone);
+        if (profile.dateOfBirth) setDob(profile.dateOfBirth);
+        if (profile.address) setAddress(profile.address);
+      }
+    }
+    populate();
+    return () => {
+      ignore = true;
+    };
+  }, [user, profile]);
+
+  const handleSave = async () => {
+    try {
+      await updateProfile({
+        firstName,
+        lastName,
+        phone,
+        dateOfBirth: dob,
+        gender: gender === 'male',
+        address,
+        city: 'TP. Hồ Chí Minh',
+        country: 'Việt Nam',
+        citizenCardId: '',
+      });
+      Alert.alert('Thành công', 'Thông tin cá nhân đã được lưu cập nhật.', [
+        { text: 'Đồng ý', onPress: () => router.back() },
+      ]);
+    } catch (err) {
+      Alert.alert(
+        'Lỗi',
+        err instanceof Error ? err.message : 'Không thể cập nhật thông tin lúc này.'
+      );
+    }
+  };
+
+  const handleChangePhone = () => {
+    Alert.alert(
+      'Đổi số điện thoại',
+      'Mã OTP xác thực sẽ được gửi tới số điện thoại mới của bạn.'
+    );
+  };
+
+  const handleUseCurrentLocation = () => {
+    setAddress('Tòa nhà Bitexco, 2 Hải Triều, Bến Nghé, Quận 1, TP. Hồ Chí Minh');
+    Alert.alert('Đã cập nhật vị trí', 'Đã lấy địa chỉ hiện tại của bạn thành công.');
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* Top Header */}
+      {/* 1. Top Navigation Bar */}
       <View style={styles.topHeader}>
         <Pressable
           accessibilityLabel="Quay lại"
           onPress={() => router.back()}
-          style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}>
-          <Icon name="arrow_back" size={20} color={ArtisanColors.onSurface} />
+          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
+          <Icon name="arrow_back" size={24} color={ArtisanColors.onSurface} />
         </Pressable>
 
-        <View style={styles.brandBadge}>
-          <Icon name="restaurant" size={18} color={ArtisanColors.primary} fill />
-          <Text style={styles.brandBadgeText}>Artisan Kitchen</Text>
-        </View>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          Chỉnh sửa thông tin cá nhân
+        </Text>
 
-        <Pressable onPress={() => router.back()} style={styles.skipBtn}>
-          <Text style={styles.skipText}>Bỏ qua</Text>
+        <Pressable
+          accessibilityLabel="Hủy"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}>
+          <Text style={styles.cancelBtnText}>Hủy</Text>
         </Pressable>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}>
-        {/* Stepper & Headline */}
-        <View style={styles.heroSection}>
-          <View style={styles.stepBadge}>
-            <Icon name="verified" size={14} color={ArtisanColors.primary} fill />
-            <Text style={styles.stepBadgeText}>BƯỚC CUỐI CÙNG</Text>
-          </View>
-          <Text style={styles.pageTitle}>Thông tin cá nhân</Text>
-          <Text style={styles.pageDesc}>
-            Cung cấp thêm thông tin để nhận quà tặng sinh nhật độc quyền và trải nghiệm ẩm thực được cá nhân hoá chu đáo hơn.
-          </Text>
-        </View>
-
-        {/* Avatar Upload */}
+        {/* 2. Avatar & Media Upload Card */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatarRing}>
-            <Image
-              source={{ uri: MOCK_USER.avatar }}
-              style={styles.avatarImage}
-              contentFit="cover"
-              transition={200}
-            />
-            <Pressable style={styles.cameraIconBtn}>
-              <Icon name="photo_camera" size={16} color="#ffffff" />
+          <View style={styles.avatarWrapper}>
+            <View style={styles.avatarRing}>
+              <Image
+                source={{ uri: MOCK_USER.avatar }}
+                style={styles.avatarImage}
+                contentFit="cover"
+                transition={200}
+              />
+            </View>
+            <Pressable
+              accessibilityLabel="Thay đổi ảnh đại diện"
+              onPress={() =>
+                Alert.alert('Đổi ảnh đại diện', 'Chọn ảnh từ thư viện hoặc chụp ảnh mới.')
+              }
+              style={styles.cameraBadgeBtn}>
+              <Icon name="photo_camera" size={18} color="#ffffff" />
             </Pressable>
           </View>
-          <Pressable style={styles.changeAvatarBtn}>
-            <Text style={styles.changeAvatarText}>Thay đổi ảnh đại diện</Text>
+
+          <Pressable
+            onPress={() =>
+              Alert.alert('Đổi ảnh đại diện', 'Chọn ảnh từ thư viện hoặc chụp ảnh mới.')
+            }
+            style={styles.changeAvatarTextBtn}>
+            <Text style={styles.changeAvatarText}>Đổi ảnh đại diện</Text>
+            <Icon name="expand_circle_right" size={16} color={ArtisanColors.primary} />
           </Pressable>
+          <Text style={styles.avatarHelperText}>Hỗ trợ định dạng JPG, PNG tối đa 5MB</Text>
         </View>
 
-        {/* Form Fields */}
-        <View style={styles.form}>
-          {/* Name Row */}
-          <View style={styles.nameGrid}>
-            <View style={styles.nameColLeft}>
+        {/* 3. Personal Details Form */}
+        <View style={styles.formSection}>
+          {/* Name Row: Họ & tên đệm + Tên */}
+          <View style={styles.nameRow}>
+            <View style={styles.lastNameCol}>
               <Text style={styles.label}>
                 Họ & tên đệm <Text style={styles.reqStar}>*</Text>
               </Text>
               <TextInput
-                style={styles.input}
+                style={styles.inputField}
                 value={lastName}
                 onChangeText={setLastName}
                 placeholder="Nguyễn Hoàng"
                 placeholderTextColor={ArtisanColors.outline}
               />
             </View>
-
-            <View style={styles.nameColRight}>
+            <View style={styles.firstNameCol}>
               <Text style={styles.label}>
                 Tên <Text style={styles.reqStar}>*</Text>
               </Text>
               <TextInput
-                style={styles.input}
+                style={styles.inputField}
                 value={firstName}
                 onChangeText={setFirstName}
                 placeholder="Minh"
@@ -115,49 +181,125 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
-          {/* Date of Birth */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>
-              Ngày sinh <Text style={styles.labelSub}>(nhận ưu đãi sinh nhật)</Text>
-            </Text>
-            <View style={styles.inputWithIcon}>
-              <Icon name="calendar_today" size={18} color={ArtisanColors.secondary} />
+          {/* Tên hiển thị / Username (Cố định) */}
+          <View style={styles.formGroup}>
+            <View style={styles.labelWithBadgeRow}>
+              <Text style={styles.label}>Tên hiển thị / Username</Text>
+              <View style={styles.fixedBadge}>
+                <Icon name="lock" size={12} color={ArtisanColors.onSurfaceVariant} />
+                <Text style={styles.fixedBadgeText}>Cố định</Text>
+              </View>
+            </View>
+            <View style={[styles.inputWrapper, styles.readOnlyInputWrapper]}>
+              <Text style={styles.usernamePrefix}>@</Text>
               <TextInput
-                style={styles.inputInner}
-                value={dob}
-                onChangeText={setDob}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={ArtisanColors.outline}
+                style={[styles.inputField, styles.readOnlyInputField]}
+                value={username}
+                editable={false}
               />
+              <Icon name="verified_user" size={18} color={ArtisanColors.onSurfaceVariant} />
+            </View>
+            <Text style={styles.fieldHelperText}>
+              Tên tài khoản dùng để nhận dạng trong các buổi Workshop và Bếp mở.
+            </Text>
+          </View>
+
+          {/* Email with "Đã xác minh" chip */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>
+              Địa chỉ Email <Text style={styles.reqStar}>*</Text>
+            </Text>
+            <View style={styles.inputWrapper}>
+              <Icon name="mail" size={20} color={ArtisanColors.onSurfaceVariant} />
+              <TextInput
+                style={[styles.inputField, { paddingRight: 8 }]}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <View style={styles.verifiedChip}>
+                <Icon name="check_circle" size={14} color={ArtisanColors.tertiary} fill />
+                <Text style={styles.verifiedChipText}>Đã xác minh</Text>
+              </View>
             </View>
           </View>
 
-          {/* Gender Selector Chips */}
-          <View style={styles.fieldGroup}>
+          {/* Số điện thoại with "Thay đổi" button */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>
+              Số điện thoại <Text style={styles.reqStar}>*</Text>
+            </Text>
+            <View style={styles.inputWrapper}>
+              <Icon name="call" size={20} color={ArtisanColors.onSurfaceVariant} />
+              <TextInput
+                style={[styles.inputField, { paddingRight: 8 }]}
+                value={phone}
+                editable={false}
+              />
+              <Pressable
+                onPress={handleChangePhone}
+                style={({ pressed }) => [styles.changePhoneBtn, pressed && styles.pressed]}>
+                <Text style={styles.changePhoneBtnText}>Thay đổi</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Ngày sinh with Birthday voucher perk */}
+          <View style={styles.formGroup}>
+            <View style={styles.labelWithPerkRow}>
+              <Text style={styles.label}>Ngày sinh</Text>
+              <View style={styles.perkRow}>
+                <Icon
+                  name="featured_seasonal_and_gifts"
+                  size={14}
+                  color={ArtisanColors.primary}
+                />
+                <Text style={styles.perkText}>Tặng voucher tiệc sinh nhật</Text>
+              </View>
+            </View>
+            <View style={styles.inputWrapper}>
+              <Icon name="cake" size={20} color={ArtisanColors.onSurfaceVariant} />
+              <TextInput
+                style={styles.inputField}
+                value={dob}
+                onChangeText={setDob}
+                placeholder="DD/MM/YYYY"
+                placeholderTextColor={ArtisanColors.outline}
+              />
+              <Icon name="calendar_today" size={18} color={ArtisanColors.onSurfaceVariant} />
+            </View>
+          </View>
+
+          {/* Giới tính: Tactile Pills */}
+          <View style={styles.formGroup}>
             <Text style={styles.label}>Giới tính</Text>
-            <View style={styles.genderRow}>
+            <View style={styles.genderGrid}>
               {[
                 { key: 'male', label: 'Nam', icon: 'male' },
                 { key: 'female', label: 'Nữ', icon: 'female' },
-                { key: 'other', label: 'Khác', icon: 'person' },
-              ].map((g) => {
-                const isSelected = gender === g.key;
+                { key: 'other', label: 'Khác', icon: 'transgender' },
+              ].map((item) => {
+                const isSelected = gender === item.key;
                 return (
                   <Pressable
-                    key={g.key}
-                    onPress={() => setGender(g.key as any)}
-                    style={[styles.genderChip, isSelected && styles.genderChipSelected]}>
+                    key={item.key}
+                    onPress={() => setGender(item.key as any)}
+                    style={[
+                      styles.genderPill,
+                      isSelected ? styles.genderPillActive : styles.genderPillInactive,
+                    ]}>
                     <Icon
-                      name={g.icon}
+                      name={item.icon}
                       size={18}
-                      color={isSelected ? ArtisanColors.primary : ArtisanColors.secondary}
+                      color={isSelected ? '#ffffff' : ArtisanColors.onSurfaceVariant}
                     />
                     <Text
                       style={[
-                        styles.genderText,
-                        isSelected && styles.genderTextSelected,
+                        styles.genderPillText,
+                        isSelected ? styles.genderPillTextActive : styles.genderPillTextInactive,
                       ]}>
-                      {g.label}
+                      {item.label}
                     </Text>
                   </Pressable>
                 );
@@ -165,63 +307,96 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
-          {/* Phone */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Số điện thoại liên hệ</Text>
-            <View style={styles.inputWithIcon}>
-              <Icon name="call" size={18} color={ArtisanColors.secondary} />
-              <TextInput
-                style={styles.inputInner}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                placeholder="+84 908..."
-                placeholderTextColor={ArtisanColors.outline}
-              />
+          {/* Địa chỉ giao hàng mặc định */}
+          <View style={styles.formGroup}>
+            <View style={styles.labelWithActionRow}>
+              <Text style={styles.label}>Địa chỉ nhận món giao tận nơi</Text>
+              <Pressable
+                onPress={handleUseCurrentLocation}
+                style={({ pressed }) => [styles.locationActionBtn, pressed && styles.pressed]}>
+                <Icon name="my_location" size={14} color={ArtisanColors.primary} />
+                <Text style={styles.locationActionText}>Vị trí hiện tại</Text>
+              </Pressable>
             </View>
-          </View>
-
-          {/* Default Address */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Địa chỉ nhận hàng mặc định</Text>
-            <View style={styles.inputWithIcon}>
-              <Icon name="location_on" size={18} color={ArtisanColors.secondary} />
+            <View style={styles.textareaWrapper}>
+              <View style={styles.textareaIcon}>
+                <Icon name="location_on" size={20} color={ArtisanColors.primary} fill />
+              </View>
               <TextInput
-                style={styles.inputInner}
+                style={styles.textarea}
                 value={address}
                 onChangeText={setAddress}
-                placeholder="Số nhà, tên đường, quận..."
+                multiline
+                numberOfLines={2}
+                placeholder="Nhập địa chỉ nhận hàng"
                 placeholderTextColor={ArtisanColors.outline}
               />
             </View>
-          </View>
 
-          {/* Dietary Notes */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Ghi chú khẩu vị & Dị ứng</Text>
-            <TextInput
-              style={styles.textArea}
-              value={dietaryNotes}
-              onChangeText={setDietaryNotes}
-              placeholder="Ví dụ: Dị ứng tôm cua, ít cay, không hành tây sống..."
-              placeholderTextColor={ArtisanColors.outline}
-              multiline
-              numberOfLines={3}
-            />
+            {/* Checkbox: Đặt làm mặc định */}
+            <Pressable
+              onPress={() => setIsDefaultAddress(!isDefaultAddress)}
+              style={styles.defaultAddressRow}>
+              <View
+                style={[
+                  styles.checkboxBox,
+                  isDefaultAddress && styles.checkboxBoxChecked,
+                ]}>
+                {isDefaultAddress && <Icon name="check" size={12} color="#ffffff" />}
+              </View>
+              <Text style={styles.defaultAddressText}>
+                Đặt làm địa chỉ giao hàng mặc định cho bữa trưa & tối
+              </Text>
+            </Pressable>
           </View>
         </View>
 
-        <View style={{ height: 100 }} />
+        {/* 4. Privacy & Security Note */}
+        <View style={styles.securityBox}>
+          <View style={styles.securityIconBox}>
+            <Icon name="security" size={18} color={ArtisanColors.onSurfaceVariant} />
+          </View>
+          <View style={styles.securityContent}>
+            <Text style={styles.securityTitle}>Bảo mật thông tin khách ẩm thực</Text>
+            <Text style={styles.securityDesc}>
+              Thông tin của bạn được mã hóa và bảo mật theo tiêu chuẩn ẩm thực Artisan Kitchen. Chúng tôi cam kết không chia sẻ cho bên thứ ba.
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ height: 140 }} />
       </ScrollView>
 
-      {/* Docked Save Button */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+      {/* 5. Bottom Fixed Actions */}
+      <View
+        style={[
+          styles.bottomActionBar,
+          { paddingBottom: Math.max(insets.bottom, 16) },
+        ]}>
         <Pressable
           accessibilityRole="button"
+          disabled={isLoading}
           onPress={handleSave}
-          style={({ pressed }) => [styles.saveBtn, pressed && styles.pressed]}>
-          <Text style={styles.saveBtnText}>Lưu thông tin</Text>
-          <Icon name="arrow_forward" size={18} color="#ffffff" />
+          style={({ pressed }) => [
+            styles.saveBtn,
+            isLoading && { opacity: 0.7 },
+            pressed && styles.pressed,
+          ]}>
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <>
+              <Icon name="check" size={20} color="#ffffff" />
+              <Text style={styles.saveBtnText}>Lưu thay đổi</Text>
+            </>
+          )}
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.discardBtn, pressed && styles.pressed]}>
+          <Text style={styles.discardBtnText}>Hủy bỏ và quay lại</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -238,9 +413,6 @@ const styles = StyleSheet.create({
         width: '100%',
         marginHorizontal: 'auto' as any,
         minHeight: '100vh' as any,
-        borderLeftWidth: 1,
-        borderRightWidth: 1,
-        borderColor: 'rgba(227, 190, 181, 0.3)',
       },
     }),
   },
@@ -251,256 +423,390 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(143, 112, 104, 0.15)',
+    borderBottomColor: ArtisanColors.outlineVariant,
+    backgroundColor: ArtisanColors.surface,
   },
-  roundBtn: {
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: ArtisanColors.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: 'rgba(227, 190, 181, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  brandBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 16,
-    backgroundColor: ArtisanColors.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: 'rgba(227, 190, 181, 0.4)',
-  },
-  brandBadgeText: {
-    fontSize: 13,
+  headerTitle: {
+    flex: 1,
+    fontSize: 17,
     fontWeight: '700',
     color: ArtisanColors.onSurface,
+    textAlign: 'center',
+    marginHorizontal: 8,
   },
-  skipBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  cancelBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  skipText: {
-    fontSize: 13,
-    color: ArtisanColors.secondary,
+  cancelBtnText: {
+    fontSize: 14,
+    color: ArtisanColors.onSurfaceVariant,
     fontWeight: '600',
   },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
   },
-  heroSection: {
-    gap: 6,
-    marginBottom: 20,
-  },
-  stepBadge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    backgroundColor: 'rgba(173, 44, 0, 0.1)',
-  },
-  stepBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: ArtisanColors.primary,
-    letterSpacing: 0.6,
-  },
-  pageTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: ArtisanColors.onSurface,
-    letterSpacing: -0.4,
-  },
-  pageDesc: {
-    fontSize: 13,
-    color: ArtisanColors.secondary,
-    lineHeight: 18,
-  },
   avatarSection: {
     alignItems: 'center',
-    marginBottom: 24,
-    gap: 8,
+    marginBottom: 20,
+  },
+  avatarWrapper: {
+    position: 'relative',
   },
   avatarRing: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    borderWidth: 2,
-    borderColor: ArtisanColors.outlineVariant,
-    borderStyle: 'dashed',
-    padding: 3,
-    position: 'relative',
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    overflow: 'hidden',
+    backgroundColor: ArtisanColors.surfaceContainer,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
   },
   avatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 42,
   },
-  cameraIconBtn: {
+  cameraBadgeBtn: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: ArtisanColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: ArtisanColors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  changeAvatarBtn: {
-    paddingVertical: 2,
+  changeAvatarTextBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 10,
   },
   changeAvatarText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: ArtisanColors.primary,
   },
-  form: {
-    gap: 16,
+  avatarHelperText: {
+    fontSize: 12,
+    color: ArtisanColors.onSurfaceVariant,
+    marginTop: 4,
   },
-  nameGrid: {
-    flexDirection: 'row',
-    gap: 12,
+  formSection: {
+    gap: 18,
   },
-  nameColLeft: {
-    flex: 3,
-    gap: 6,
-  },
-  nameColRight: {
-    flex: 2,
-    gap: 6,
-  },
-  fieldGroup: {
+  formGroup: {
     gap: 6,
   },
   label: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: ArtisanColors.onSurface,
   },
   reqStar: {
     color: ArtisanColors.primary,
   },
-  labelSub: {
-    fontWeight: '400',
-    color: ArtisanColors.secondary,
-    fontSize: 12,
+  nameRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
-  input: {
+  lastNameCol: {
+    flex: 3,
+    gap: 6,
+  },
+  firstNameCol: {
+    flex: 2,
+    gap: 6,
+  },
+  inputWrapper: {
     height: 48,
     backgroundColor: ArtisanColors.surfaceContainerLowest,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(227, 190, 181, 0.5)',
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: ArtisanColors.onSurface,
-  },
-  inputWithIcon: {
-    height: 48,
-    backgroundColor: ArtisanColors.surfaceContainerLowest,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(227, 190, 181, 0.5)',
-    paddingHorizontal: 12,
+    borderColor: ArtisanColors.outlineVariant,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 12,
     gap: 8,
   },
-  inputInner: {
-    flex: 1,
-    fontSize: 14,
-    color: ArtisanColors.onSurface,
-    padding: 0,
+  readOnlyInputWrapper: {
+    backgroundColor: ArtisanColors.surfaceContainerLow,
+    borderColor: 'rgba(216, 194, 188, 0.4)',
   },
-  genderRow: {
+  inputField: {
+    flex: 1,
+    fontSize: 15,
+    color: ArtisanColors.onSurface,
+    paddingVertical: 8,
+  },
+  readOnlyInputField: {
+    color: ArtisanColors.onSurfaceVariant,
+  },
+  usernamePrefix: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: ArtisanColors.onSurfaceVariant,
+  },
+  labelWithBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fixedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: ArtisanColors.surfaceContainer,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  fixedBadgeText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: ArtisanColors.onSurfaceVariant,
+  },
+  fieldHelperText: {
+    fontSize: 12,
+    color: ArtisanColors.onSurfaceVariant,
+    lineHeight: 16,
+  },
+  verifiedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(56, 106, 33, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  verifiedChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: ArtisanColors.tertiary,
+  },
+  changePhoneBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  changePhoneBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: ArtisanColors.primary,
+  },
+  labelWithPerkRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  perkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  perkText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: ArtisanColors.primary,
+  },
+  genderGrid: {
     flexDirection: 'row',
     gap: 10,
   },
-  genderChip: {
+  genderPill: {
     flex: 1,
     height: 44,
     borderRadius: 12,
-    backgroundColor: ArtisanColors.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: 'rgba(227, 190, 181, 0.5)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    borderWidth: 1,
   },
-  genderChipSelected: {
-    borderColor: ArtisanColors.primary,
-    backgroundColor: 'rgba(173, 44, 0, 0.06)',
+  genderPillActive: {
+    backgroundColor: '#2A201C',
+    borderColor: '#2A201C',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  genderText: {
-    fontSize: 13,
+  genderPillInactive: {
+    backgroundColor: ArtisanColors.surfaceContainerLowest,
+    borderColor: ArtisanColors.outlineVariant,
+  },
+  genderPillText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: ArtisanColors.secondary,
   },
-  genderTextSelected: {
+  genderPillTextActive: {
+    color: '#ffffff',
+  },
+  genderPillTextInactive: {
+    color: ArtisanColors.onSurface,
+  },
+  labelWithActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  locationActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  locationActionText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: ArtisanColors.primary,
-    fontWeight: '700',
   },
-  textArea: {
-    minHeight: 80,
+  textareaWrapper: {
+    minHeight: 70,
     backgroundColor: ArtisanColors.surfaceContainerLowest,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(227, 190, 181, 0.5)',
-    padding: 12,
+    borderColor: ArtisanColors.outlineVariant,
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  textareaIcon: {
+    marginTop: 2,
+  },
+  textarea: {
+    flex: 1,
     fontSize: 14,
     color: ArtisanColors.onSurface,
-    textAlignVertical: 'top',
+    lineHeight: 20,
+    paddingTop: 0,
   },
-  bottomBar: {
+  defaultAddressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 4,
+  },
+  checkboxBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: ArtisanColors.outline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxBoxChecked: {
+    backgroundColor: ArtisanColors.primary,
+    borderColor: ArtisanColors.primary,
+  },
+  defaultAddressText: {
+    fontSize: 13,
+    color: ArtisanColors.onSurface,
+    flex: 1,
+  },
+  securityBox: {
+    marginTop: 24,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: ArtisanColors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: 'rgba(216, 194, 188, 0.4)',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  securityIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: ArtisanColors.surfaceContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  securityContent: {
+    flex: 1,
+  },
+  securityTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: ArtisanColors.onSurface,
+    marginBottom: 2,
+  },
+  securityDesc: {
+    fontSize: 12,
+    color: ArtisanColors.onSurfaceVariant,
+    lineHeight: 16,
+  },
+  bottomActionBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: ArtisanColors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(143, 112, 104, 0.2)',
+    backgroundColor: 'rgba(254, 248, 245, 0.95)',
     paddingHorizontal: 16,
-    paddingTop: 10,
-    zIndex: 40,
-    ...Platform.select({
-      web: {
-        maxWidth: 520,
-        marginHorizontal: 'auto' as any,
-      },
-    }),
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: ArtisanColors.outlineVariant,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 8,
+    gap: 8,
   },
   saveBtn: {
-    height: 48,
-    borderRadius: 24,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: ArtisanColors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     shadowColor: ArtisanColors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   saveBtnText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
   },
+  discardBtn: {
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  discardBtnText: {
+    fontSize: 14,
+    color: ArtisanColors.onSurfaceVariant,
+    fontWeight: '500',
+  },
   pressed: {
+    opacity: 0.85,
     transform: [{ scale: 0.98 }],
-    opacity: 0.9,
   },
 });

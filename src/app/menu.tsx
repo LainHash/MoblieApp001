@@ -1,15 +1,7 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomNavigation } from '@/components/bottom-navigation';
@@ -18,17 +10,44 @@ import { Icon } from '@/components/icon';
 import { TopHeader } from '@/components/top-header';
 import { CATEGORIES, CURRENT_BRANCH, DISHES } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
+import { useBranches } from '@/features/branches';
+import { useCart } from '@/features/cart';
+import { useCategories, useProducts } from '@/features/catalog';
+import { useWishlist } from '@/features/wishlist';
 
 export default function MenuScreen() {
+  const { activeBranch } = useBranches();
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [searchQuery, setSearchQuery] = useState('');
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({ 'dish-1': true });
 
-  const toggleFavorite = (id: string) => {
-    setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  const { products } = useProducts({ branchId: activeBranch?.id, keyword: searchQuery });
+  const { categories: backendCategories } = useCategories();
+  const { isFavorite, toggleFavorite } = useWishlist(activeBranch?.id);
+  const { totalItemsCount, subtotal, addItem: addToCart } = useCart(activeBranch?.id);
 
-  const filteredDishes = DISHES.filter((dish) => {
+  const categoryList = backendCategories.length > 0
+    ? ['Tất cả', ...backendCategories.map((c) => c.name)]
+    : CATEGORIES;
+
+  const availableDishes = products.length > 0
+    ? products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        subtitle: p.brandName || p.categoryName || 'Món ngon thủ công',
+        price: p.unitPrice || 0,
+        priceFormatted: (p.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
+        calories: '450 kcal',
+        category: p.categoryName || 'Tất cả',
+        badge: p.stockStatus === 1 ? 'Món Bếp trưởng' : undefined,
+        rating: '4.9',
+        image:
+          p.primaryImage?.image?.url ||
+          'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
+        description: p.description || '',
+      }))
+    : DISHES;
+
+  const filteredDishes = availableDishes.filter((dish) => {
     const matchesCategory =
       selectedCategory === 'Tất cả' ||
       dish.category.toLowerCase().includes(selectedCategory.toLowerCase()) ||
@@ -40,11 +59,20 @@ export default function MenuScreen() {
     return matchesCategory && matchesQuery;
   });
 
+  const handleAddToCart = async (dishId: string, dishName: string) => {
+    try {
+      await addToCart(dishId);
+      Alert.alert('Thành công', `Đã thêm ${dishName} vào giỏ hàng`);
+    } catch (err) {
+      Alert.alert('Lỗi', err instanceof Error ? err.message : 'Không thể thêm vào giỏ hàng');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* Top Header */}
       <TopHeader
-        title={CURRENT_BRANCH.name}
+        title={activeBranch?.name || CURRENT_BRANCH.name}
         showBranch
         showNotifications
       />
@@ -64,7 +92,7 @@ export default function MenuScreen() {
             style={({ pressed }) => [styles.cartBtn, pressed && styles.pressed]}>
             <Icon name="shopping_bag" size={22} color={ArtisanColors.onSurface} />
             <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>2</Text>
+              <Text style={styles.cartBadgeText}>{totalItemsCount}</Text>
             </View>
           </Pressable>
         </View>
@@ -96,7 +124,7 @@ export default function MenuScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryList}>
-            {CATEGORIES.map((cat) => {
+            {categoryList.map((cat) => {
               const isSelected = selectedCategory === cat;
               return (
                 <Pressable
@@ -132,7 +160,7 @@ export default function MenuScreen() {
           <View style={styles.branchBadge}>
             <View style={styles.branchDot} />
             <Text style={styles.branchBadgeText} numberOfLines={1}>
-              {CURRENT_BRANCH.name}
+              {activeBranch?.name || CURRENT_BRANCH.name}
             </Text>
           </View>
         </View>
@@ -140,11 +168,11 @@ export default function MenuScreen() {
         {/* 2-Column Product Grid */}
         <View style={styles.grid}>
           {filteredDishes.map((dish) => {
-            const isFav = !!favorites[dish.id];
+            const isFav = isFavorite(dish.id);
             return (
               <Pressable
                 key={dish.id}
-                onPress={() => router.push('/food-detail')}
+                onPress={() => router.push({ pathname: '/food-detail', params: { id: dish.id } })}
                 style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
                 <View style={styles.imageWrap}>
                   <Image
@@ -191,7 +219,7 @@ export default function MenuScreen() {
                       accessibilityLabel={`Thêm ${dish.name} vào giỏ hàng`}
                       onPress={(e) => {
                         e.stopPropagation();
-                        router.push('/cart');
+                        handleAddToCart(dish.id, dish.name);
                       }}
                       style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}>
                       <Icon name="add" size={18} color="#ffffff" />
@@ -207,7 +235,11 @@ export default function MenuScreen() {
       </ScrollView>
 
       {/* Floating Persistent Cart Drawer */}
-      <FloatingCartBar itemCount={2} subtotal="415.000 đ" bottomOffset={70} />
+      <FloatingCartBar
+        itemCount={totalItemsCount}
+        subtotal={subtotal > 0 ? `${subtotal.toLocaleString('vi-VN')} đ` : '0 đ'}
+        bottomOffset={70}
+      />
 
       {/* Bottom Navigation */}
       <BottomNavigation currentTab="menu" />

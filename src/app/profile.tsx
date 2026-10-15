@@ -17,21 +17,39 @@ import { Icon } from '@/components/icon';
 import { TopHeader } from '@/components/top-header';
 import { MOCK_USER } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
+import { useAuth } from '@/features/auth';
+import { useUserProfile } from '@/features/user';
 
 export default function ProfileScreen() {
-  const handleLogout = () => {
+  const { user } = useUserProfile();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    const doLogout = async () => {
+      try {
+        await logout();
+        router.replace('/login');
+      } catch {
+        router.replace('/login');
+      }
+    };
+
     if (Platform.OS === 'web') {
       const confirmLogout = window.confirm('Bạn có chắc chắn muốn đăng xuất tài khoản?');
       if (confirmLogout) {
-        router.push('/login');
+        await doLogout();
       }
     } else {
       Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất tài khoản?', [
         { text: 'Hủy', style: 'cancel' },
-        { text: 'Đăng xuất', style: 'destructive', onPress: () => router.push('/login') },
+        { text: 'Đăng xuất', style: 'destructive', onPress: doLogout },
       ]);
     }
   };
+
+  const displayName = user?.userName || MOCK_USER.name;
+  const displayEmail = user?.email || MOCK_USER.email;
+  const roleTitle = user?.roleName ? `Hội viên (${user.roleName})` : MOCK_USER.membershipTier;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -74,14 +92,14 @@ export default function ProfileScreen() {
           <View style={styles.userInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.userName} numberOfLines={1}>
-                {MOCK_USER.name}
+                {displayName}
               </Text>
               <Icon name="verified" size={18} color={ArtisanColors.tertiary} fill />
             </View>
-            <Text style={styles.userHandle}>{MOCK_USER.username}</Text>
+            <Text style={styles.userHandle}>@{user?.userName || MOCK_USER.username}</Text>
             <View style={styles.tierChip}>
               <Icon name="stars" size={14} color={ArtisanColors.primary} fill />
-              <Text style={styles.tierText}>{MOCK_USER.membershipTier}</Text>
+              <Text style={styles.tierText}>{roleTitle}</Text>
             </View>
           </View>
         </View>
@@ -132,13 +150,13 @@ export default function ProfileScreen() {
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Họ và tên</Text>
-            <Text style={styles.infoValueBold}>{MOCK_USER.name}</Text>
+            <Text style={styles.infoValueBold}>{displayName}</Text>
           </View>
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Email</Text>
             <View style={styles.verifiedRow}>
-              <Text style={styles.infoValue}>{MOCK_USER.email}</Text>
+              <Text style={styles.infoValue}>{displayEmail}</Text>
               <View style={styles.verifiedBadge}>
                 <Icon name="check_circle" size={11} color={ArtisanColors.tertiary} fill />
                 <Text style={styles.verifiedText}>Xác thực</Text>
@@ -212,6 +230,11 @@ export default function ProfileScreen() {
               action: () => {},
             },
             {
+              title: 'Món ăn yêu thích',
+              icon: 'favorite',
+              action: () => router.push('/saved'),
+            },
+            {
               title: 'Thông báo & Khuyến mãi',
               icon: 'notifications',
               action: () => {},
@@ -219,7 +242,7 @@ export default function ProfileScreen() {
             {
               title: 'Đổi mật khẩu',
               icon: 'lock',
-              action: () => {},
+              action: () => router.push('/change-password'),
             },
             {
               title: 'Ngôn ngữ: Tiếng Việt',

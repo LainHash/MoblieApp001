@@ -9,10 +9,10 @@ import { ArtisanColors } from '@/constants/theme';
 export type TabKey = 'home' | 'menu' | 'saved' | 'orders' | 'profile';
 
 interface BottomNavigationProps {
-  currentTab: TabKey;
+  currentTab?: TabKey;
 }
 
-export function BottomNavigation({ currentTab }: BottomNavigationProps) {
+export function BottomNavigation({ currentTab = 'home' }: BottomNavigationProps) {
   const insets = useSafeAreaInsets();
 
   const tabs: { key: TabKey; label: string; icon: string; route: string }[] = [

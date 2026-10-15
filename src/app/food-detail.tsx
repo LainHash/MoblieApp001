@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -15,12 +16,43 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '@/components/icon';
 import { CURRENT_BRANCH, DISHES } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
+import { useBranches } from '@/features/branches';
+import { useCart } from '@/features/cart';
+import { useProductDetail } from '@/features/catalog';
+import { useWishlist } from '@/features/wishlist';
 
 export default function FoodDetailScreen() {
   const insets = useSafeAreaInsets();
-  const dish = DISHES[0]; // Burger Bò Wagyu Nấm Truffle
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { activeBranch } = useBranches();
+  const { product } = useProductDetail(id, activeBranch?.id);
+  const { isFavorite, toggleFavorite } = useWishlist(activeBranch?.id);
+  const { addItem: addToCart } = useCart(activeBranch?.id);
 
-  const [isFavorite, setIsFavorite] = useState(true);
+  // Món ăn hiện tại từ API hoặc fallback mock
+  const fallbackDish = DISHES.find((d) => d.id === id) || DISHES[0];
+  const dish = product
+    ? {
+        id: product.id,
+        name: product.name,
+        subtitle: product.categoryName || product.brandName || 'Món ngon thủ công',
+        price: product.unitPrice || 0,
+        priceFormatted: (product.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
+        calories: '450 kcal',
+        category: product.categoryName || 'Món chính',
+        rating: '4.9',
+        image:
+          product.primaryImage?.image?.url ||
+          product.productImages?.[0]?.image?.url ||
+          fallbackDish.image,
+        description: product.description || fallbackDish.description,
+        dietary: fallbackDish.dietary,
+        bunOptions: fallbackDish.bunOptions,
+        donenessOptions: fallbackDish.donenessOptions,
+        addOns: fallbackDish.addOns,
+      }
+    : fallbackDish;
+
   const [selectedBun, setSelectedBun] = useState(dish.bunOptions?.[0]?.label || '');
   const [selectedDoneness, setSelectedDoneness] = useState(dish.donenessOptions?.[0]?.label || '');
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([
@@ -28,6 +60,8 @@ export default function FoodDetailScreen() {
   ]);
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
+
+  const isFav = isFavorite(dish.id);
 
   const toggleAddOn = (name: string) => {
     if (selectedAddOns.includes(name)) {
@@ -52,6 +86,18 @@ export default function FoodDetailScreen() {
     return total.toLocaleString('vi-VN') + ' đ';
   };
 
+  const handleAddToCart = async () => {
+    try {
+      await addToCart(dish.id);
+      Alert.alert('Thành công', `Đã thêm ${quantity}x ${dish.name} vào giỏ hàng`, [
+        { text: 'Xem giỏ hàng', onPress: () => router.push('/cart') },
+        { text: 'Tiếp tục xem', style: 'cancel' },
+      ]);
+    } catch (err) {
+      Alert.alert('Lỗi', err instanceof Error ? err.message : 'Không thể thêm vào giỏ hàng');
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Top Floating App Bar */}
@@ -67,13 +113,13 @@ export default function FoodDetailScreen() {
           <View style={styles.topBarRight}>
             <Pressable
               accessibilityLabel="Yêu thích"
-              onPress={() => setIsFavorite(!isFavorite)}
+              onPress={() => toggleFavorite(dish.id)}
               style={({ pressed }) => [styles.topIconBtn, pressed && styles.pressed]}>
               <Icon
                 name="favorite"
                 size={20}
-                color={isFavorite ? ArtisanColors.primary : ArtisanColors.secondary}
-                fill={isFavorite}
+                color={isFav ? ArtisanColors.primary : ArtisanColors.secondary}
+                fill={isFav}
               />
             </Pressable>
             <Pressable
@@ -122,7 +168,7 @@ export default function FoodDetailScreen() {
           <View style={styles.statusTile}>
             <Icon name="storefront" size={18} color={ArtisanColors.primary} fill />
             <Text style={styles.statusTileText}>
-              Có sẵn tại {CURRENT_BRANCH.name} • Chuẩn bị ~15-20 phút
+              Có sẵn tại {activeBranch?.name || CURRENT_BRANCH.name} • Chuẩn bị ~15-20 phút
             </Text>
           </View>
 
@@ -287,7 +333,7 @@ export default function FoodDetailScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/cart')}
+          onPress={handleAddToCart}
           style={({ pressed }) => [styles.addToCartBtn, pressed && styles.pressed]}>
           <Text style={styles.addToCartText}>Thêm vào giỏ • {calculateTotal()}</Text>
         </Pressable>
@@ -360,7 +406,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   heroVignette: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.12)',
   },
   dotsRow: {

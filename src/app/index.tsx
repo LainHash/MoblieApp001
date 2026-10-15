@@ -2,8 +2,10 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Alert,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,12 +20,45 @@ import { Icon } from '@/components/icon';
 import { TopHeader } from '@/components/top-header';
 import { CATEGORIES, CURRENT_BRANCH, DISHES, MOCK_USER } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
+import { useBranches } from '@/features/branches';
+import { useCart } from '@/features/cart';
+import { useHome } from '@/features/home';
+import { useUserProfile } from '@/features/user';
 
 export default function HomeScreen() {
+  const { activeBranch, branches, selectBranch } = useBranches();
+  const { products, categories: backendCategories, isRefreshing, onRefresh } = useHome(activeBranch?.id);
+  const { totalItemsCount, subtotal, addItem: addToCart } = useCart(activeBranch?.id);
+  const { user } = useUserProfile();
+
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredDishes = DISHES.filter((dish) => {
+  // Danh mục kết hợp từ backend hoặc fallback
+  const categoryList = backendCategories.length > 0
+    ? ['Tất cả', ...backendCategories.map((c) => c.name)]
+    : CATEGORIES;
+
+  // Dữ liệu món ăn từ backend hoặc fallback DISHES
+  const availableDishes = products.length > 0
+    ? products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        subtitle: p.brandName || p.categoryName || 'Món ngon thủ công',
+        price: p.unitPrice || 0,
+        priceFormatted: (p.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
+        calories: '450 kcal',
+        category: p.categoryName || 'Món chính',
+        badge: p.stockStatus === 1 ? 'Món Bếp trưởng' : undefined,
+        rating: '4.9',
+        image:
+          p.primaryImage?.image?.url ||
+          'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
+        description: p.description || '',
+      }))
+    : DISHES;
+
+  const filteredDishes = availableDishes.filter((dish) => {
     const matchesCategory =
       selectedCategory === 'Tất cả' ||
       dish.category.toLowerCase().includes(selectedCategory.toLowerCase()) ||
@@ -35,24 +70,58 @@ export default function HomeScreen() {
     return matchesCategory && matchesQuery;
   });
 
+  const handleAddToCart = async (dishId: string, dishName: string) => {
+    try {
+      await addToCart(dishId);
+      Alert.alert('Thành công', `Đã thêm ${dishName} vào giỏ hàng`);
+    } catch (err) {
+      Alert.alert('Lỗi', err instanceof Error ? err.message : 'Không thể thêm vào giỏ hàng');
+    }
+  };
+
+  const handleSwitchBranch = () => {
+    if (branches.length === 0) {
+      Alert.alert('Chi nhánh', 'Hiện chỉ có 1 chi nhánh khả dụng.');
+      return;
+    }
+    Alert.alert(
+      'Chọn chi nhánh',
+      'Vui lòng chọn chi nhánh gần bạn nhất:',
+      [
+        ...branches.map((b) => ({
+          text: b.name + (b.id === activeBranch?.id ? ' (Đang chọn)' : ''),
+          onPress: () => selectBranch(b),
+        })),
+        { text: 'Hủy', style: 'cancel' as const },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* Top App Bar */}
       <TopHeader
-        title={CURRENT_BRANCH.name}
+        title={activeBranch?.name || CURRENT_BRANCH.name}
         showBranch
         showNotifications
       />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={ArtisanColors.primary}
+          />
+        }
         contentContainerStyle={styles.scrollContent}>
         {/* Customer Greeting & Avatar */}
         <View style={styles.greetingSection}>
           <View style={styles.greetingLeft}>
             <Text style={styles.greetingSub}>BẢO CHỨNG ẨM THỰC</Text>
             <Text style={styles.greetingTitle}>
-              Chào buổi tối, Alex <Text style={styles.waveEmoji}>👋</Text>
+              Chào buổi tối, {user?.userName || 'Alex'} <Text style={styles.waveEmoji}>👋</Text>
             </Text>
           </View>
           <Pressable
@@ -75,7 +144,9 @@ export default function HomeScreen() {
               <Icon name="location_on" size={20} color={ArtisanColors.primary} fill />
             </View>
             <View style={styles.branchInfo}>
-              <Text style={styles.branchCardTitle}>Chi nhánh Trung tâm Flagship</Text>
+              <Text style={styles.branchCardTitle}>
+                {activeBranch?.name || 'Chi nhánh Trung tâm Flagship'}
+              </Text>
               <View style={styles.branchCardMeta}>
                 <Text style={styles.metaDistance}>{CURRENT_BRANCH.distance}</Text>
                 <View style={styles.metaDot} />
@@ -85,7 +156,7 @@ export default function HomeScreen() {
           </View>
           <Pressable
             style={({ pressed }) => [styles.switchButton, pressed && styles.pressed]}
-            onPress={() => {}}>
+            onPress={handleSwitchBranch}>
             <Text style={styles.switchButtonText}>Đổi chi nhánh</Text>
           </Pressable>
         </View>
@@ -154,7 +225,7 @@ export default function HomeScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryScroll}>
-            {CATEGORIES.map((cat) => {
+            {categoryList.map((cat) => {
               const isSelected = selectedCategory === cat;
               return (
                 <Pressable
@@ -204,7 +275,7 @@ export default function HomeScreen() {
               key={dish.id}
               accessibilityRole="button"
               accessibilityLabel={dish.name}
-              onPress={() => router.push('/food-detail')}
+              onPress={() => router.push({ pathname: '/food-detail', params: { id: dish.id } })}
               style={({ pressed }) => [styles.dishCard, pressed && styles.pressed]}>
               <View style={styles.dishImageWrap}>
                 <Image
@@ -234,7 +305,7 @@ export default function HomeScreen() {
                     accessibilityLabel={`Thêm ${dish.name} vào giỏ`}
                     onPress={(e) => {
                       e.stopPropagation();
-                      router.push('/cart');
+                      handleAddToCart(dish.id, dish.name);
                     }}
                     style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}>
                     <Icon name="add" size={18} color={ArtisanColors.onSurface} />
@@ -262,7 +333,11 @@ export default function HomeScreen() {
       </ScrollView>
 
       {/* Floating Persistent Cart Drawer */}
-      <FloatingCartBar itemCount={2} subtotal="415.000 đ" bottomOffset={70} />
+      <FloatingCartBar
+        itemCount={totalItemsCount}
+        subtotal={subtotal > 0 ? `${subtotal.toLocaleString('vi-VN')} đ` : '0 đ'}
+        bottomOffset={70}
+      />
 
       {/* Docked Full-Width Bottom Navigation */}
       <BottomNavigation currentTab="home" />
@@ -447,10 +522,10 @@ const styles = StyleSheet.create({
     borderColor: '#EFE9E2',
   },
   heroPromoBg: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   heroGradientOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(251, 249, 246, 0.88)',
     width: '78%',
   },

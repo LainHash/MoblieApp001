@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -13,18 +15,60 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
 import { ArtisanColors } from '@/constants/theme';
+import { useAuth } from '@/features/auth';
 
 export default function RegisterScreen() {
-  const [username, setUsername] = useState('alexmorgan99');
-  const [email, setEmail] = useState('alex.morgan@email.com');
-  const [phone, setPhone] = useState('0908 123 456');
-  const [password, setPassword] = useState('••••••••••••');
-  const [confirmPassword, setConfirmPassword] = useState('••••••••••••');
+  const { register, isLoading } = useAuth();
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(true);
 
-  const handleRegister = () => {
-    router.push('/otp');
+  const handleRegister = async () => {
+    if (!username.trim() || !email.trim() || !password) {
+      Alert.alert('Thông báo', 'Vui lòng điền đầy đủ các thông tin bắt buộc.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Thông báo', 'Mật khẩu xác nhận không trùng khớp.');
+      return;
+    }
+    if (!agreeTerms) {
+      Alert.alert('Thông báo', 'Vui lòng đồng ý với Điều khoản sử dụng & Chính sách bảo mật.');
+      return;
+    }
+
+    try {
+      await register({
+        email: email.trim(),
+        userName: username.trim(),
+        password,
+        confirmPassword,
+      });
+
+      Alert.alert(
+        'Đăng ký thành công',
+        'Mã OTP kích hoạt tài khoản đã được gửi đến email của bạn.',
+        [
+          {
+            text: 'Nhập mã OTP',
+            onPress: () =>
+              router.push({
+                pathname: '/otp',
+                params: { email: email.trim() },
+              }),
+          },
+        ]
+      );
+    } catch (err) {
+      Alert.alert(
+        'Đăng ký thất bại',
+        err instanceof Error ? err.message : 'Vui lòng kiểm tra lại thông tin.'
+      );
+    }
   };
 
   return (
@@ -184,10 +228,21 @@ export default function RegisterScreen() {
           {/* Submit Button */}
           <Pressable
             accessibilityRole="button"
+            disabled={isLoading}
             onPress={handleRegister}
-            style={({ pressed }) => [styles.submitBtn, pressed && styles.pressed]}>
-            <Text style={styles.submitBtnText}>Tiếp tục</Text>
-            <Icon name="arrow_forward" size={18} color="#ffffff" />
+            style={({ pressed }) => [
+              styles.submitBtn,
+              isLoading && { opacity: 0.7 },
+              pressed && styles.pressed,
+            ]}>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <>
+                <Text style={styles.submitBtnText}>Tiếp tục</Text>
+                <Icon name="arrow_forward" size={18} color="#ffffff" />
+              </>
+            )}
           </Pressable>
         </View>
 
