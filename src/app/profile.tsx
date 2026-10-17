@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -15,13 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNavigation } from '@/components/bottom-navigation';
 import { Icon } from '@/components/icon';
 import { TopHeader } from '@/components/top-header';
-import { MOCK_USER } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { useUserProfile } from '@/features/user';
 
 export default function ProfileScreen() {
-  const { user } = useUserProfile();
+  const { user, profile, isLoading } = useUserProfile();
   const { logout } = useAuth();
 
   const handleLogout = async () => {
@@ -47,9 +47,55 @@ export default function ProfileScreen() {
     }
   };
 
-  const displayName = user?.userName || MOCK_USER.name;
-  const displayEmail = user?.email || MOCK_USER.email;
-  const roleTitle = user?.roleName ? `Hội viên (${user.roleName})` : MOCK_USER.membershipTier;
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <TopHeader
+          title="Hồ sơ cá nhân"
+          showBranch={false}
+          showNotifications={false}
+        />
+        <View style={styles.centerLoading}>
+          <ActivityIndicator size="large" color={ArtisanColors.primary} />
+          <Text style={styles.loadingText}>Đang tải thông tin tài khoản...</Text>
+        </View>
+        <BottomNavigation currentTab="profile" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <TopHeader
+          title="Hồ sơ cá nhân"
+          showBranch={false}
+          showNotifications={false}
+        />
+        <View style={styles.guestContainer}>
+          <View style={styles.guestIconBox}>
+            <Icon name="person" size={48} color={ArtisanColors.outlineVariant} />
+          </View>
+          <Text style={styles.guestTitle}>Chưa đăng nhập</Text>
+          <Text style={styles.guestSubtitle}>
+            Đăng nhập để xem thông tin tài khoản cá nhân, lịch sử đơn hàng và nhận các ưu đãi hấp dẫn.
+          </Text>
+          <Pressable
+            onPress={() => router.push('/login')}
+            style={({ pressed }) => [styles.loginCtaBtn, pressed && styles.pressed]}>
+            <Text style={styles.loginCtaText}>Đăng nhập ngay</Text>
+          </Pressable>
+        </View>
+        <BottomNavigation currentTab="profile" />
+      </SafeAreaView>
+    );
+  }
+
+  const displayName = profile
+    ? `${profile.lastName} ${profile.firstName}`.trim()
+    : user.userName;
+  const displayEmail = user.email;
+  const roleTitle = user.roleName ? `Hội viên (${user.roleName})` : 'Hội viên Artisan';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -61,6 +107,7 @@ export default function ProfileScreen() {
         rightAction={
           <Pressable
             accessibilityLabel="Cài đặt"
+            onPress={() => router.push('/edit-profile')}
             style={({ pressed }) => [styles.settingsBtn, pressed && styles.pressed]}>
             <Icon name="tune" size={20} color={ArtisanColors.onSurfaceVariant} />
           </Pressable>
@@ -74,18 +121,17 @@ export default function ProfileScreen() {
         <View style={styles.profileHeaderCard}>
           <View style={styles.avatarWrap}>
             <View style={styles.avatarCircle}>
-              <Image
-                source={{ uri: MOCK_USER.avatar }}
-                style={styles.avatar}
-                contentFit="cover"
-                transition={200}
-              />
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitialText}>
+                  {user.userName ? user.userName.charAt(0).toUpperCase() : 'U'}
+                </Text>
+              </View>
             </View>
             <Pressable
-              accessibilityLabel="Đổi ảnh đại diện"
+              accessibilityLabel="Đổi thông tin cá nhân"
               onPress={() => router.push('/edit-profile')}
               style={styles.cameraBtn}>
-              <Icon name="photo_camera" size={14} color="#ffffff" />
+              <Icon name="edit" size={14} color="#ffffff" />
             </Pressable>
           </View>
 
@@ -96,7 +142,7 @@ export default function ProfileScreen() {
               </Text>
               <Icon name="verified" size={18} color={ArtisanColors.tertiary} fill />
             </View>
-            <Text style={styles.userHandle}>@{user?.userName || MOCK_USER.username}</Text>
+            <Text style={styles.userHandle}>@{user.userName}</Text>
             <View style={styles.tierChip}>
               <Icon name="stars" size={14} color={ArtisanColors.primary} fill />
               <Text style={styles.tierText}>{roleTitle}</Text>
@@ -104,31 +150,27 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Membership VIP Card */}
+        {/* Membership Card */}
         <View style={styles.membershipCard}>
           <View style={styles.cardHeader}>
             <View style={styles.cardHeaderLeft}>
               <Icon name="card_membership" size={20} color={ArtisanColors.primaryFixed} />
-              <Text style={styles.cardHeaderTitle}>THẺ ĐẶC QUYỀN HỘI VIÊN</Text>
+              <Text style={styles.cardHeaderTitle}>THẺ HỘI VIÊN ARTISAN</Text>
             </View>
-            <Pressable style={styles.rewardBtn}>
-              <Text style={styles.rewardBtnText}>Đổi quà</Text>
-              <Icon name="chevron_right" size={14} color="rgba(255, 255, 255, 0.8)" />
-            </Pressable>
           </View>
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statValGold}>{MOCK_USER.points.toLocaleString('vi-VN')}</Text>
-              <Text style={styles.statSub}>Điểm thưởng</Text>
+              <Text style={styles.statValGold}>{user.roleName || 'Member'}</Text>
+              <Text style={styles.statSub}>Cấp bậc</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValWhite}>{MOCK_USER.walletBalance}</Text>
-              <Text style={styles.statSub}>Ví ẩm thực</Text>
+              <Text style={styles.statValWhite}>Đã kích hoạt</Text>
+              <Text style={styles.statSub}>Trạng thái</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValGreen}>{MOCK_USER.totalOrders} đơn</Text>
-              <Text style={styles.statSub}>Đã thưởng thức</Text>
+              <Text style={styles.statValGreen}>Bảo chứng</Text>
+              <Text style={styles.statSub}>Chính sách</Text>
             </View>
           </View>
         </View>
@@ -159,30 +201,26 @@ export default function ProfileScreen() {
               <Text style={styles.infoValue}>{displayEmail}</Text>
               <View style={styles.verifiedBadge}>
                 <Icon name="check_circle" size={11} color={ArtisanColors.tertiary} fill />
-                <Text style={styles.verifiedText}>Xác thực</Text>
+                <Text style={styles.verifiedText}>Đã xác nhận</Text>
               </View>
             </View>
           </View>
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Số điện thoại</Text>
-            <Text style={styles.infoValue}>{MOCK_USER.phone}</Text>
+            <Text style={styles.infoValue}>{profile?.phone || 'Chưa cập nhật'}</Text>
           </View>
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Ngày sinh</Text>
-            <View style={styles.verifiedRow}>
-              <Text style={styles.infoValue}>24/10/1995</Text>
-              <View style={styles.birthdayChip}>
-                <Icon name="cake" size={12} color={ArtisanColors.primary} />
-                <Text style={styles.birthdayText}>Ưu đãi sinh nhật</Text>
-              </View>
-            </View>
+            <Text style={styles.infoValue}>{profile?.dateOfBirth || 'Chưa cập nhật'}</Text>
           </View>
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Giới tính</Text>
-            <Text style={styles.infoValue}>Nam</Text>
+            <Text style={styles.infoValue}>
+              {profile ? (profile.gender ? 'Nam' : 'Nữ') : 'Chưa cập nhật'}
+            </Text>
           </View>
         </View>
 
@@ -193,25 +231,31 @@ export default function ProfileScreen() {
               <Icon name="location_on" size={20} color={ArtisanColors.primary} />
               <Text style={styles.sectionTitle}>Địa chỉ nhận hàng</Text>
             </View>
-            <Pressable style={styles.editBtn}>
-              <Text style={styles.editBtnText}>Thêm mới</Text>
-              <Icon name="add" size={16} color={ArtisanColors.primary} />
+            <Pressable onPress={() => router.push('/edit-profile')} style={styles.editBtn}>
+              <Text style={styles.editBtnText}>Cập nhật</Text>
+              <Icon name="edit" size={15} color={ArtisanColors.primary} />
             </Pressable>
           </View>
 
-          {MOCK_USER.addresses.map((addr) => (
-            <View key={addr.id} style={styles.addrCard}>
+          {profile?.address ? (
+            <View style={styles.addrCard}>
               <View style={styles.addrTopRow}>
-                <Text style={styles.addrLabel}>{addr.label}</Text>
-                {addr.isDefault && (
-                  <View style={styles.defaultAddrBadge}>
-                    <Text style={styles.defaultAddrText}>Mặc định</Text>
-                  </View>
-                )}
+                <Text style={styles.addrLabel}>Địa chỉ của tôi</Text>
+                <View style={styles.defaultAddrBadge}>
+                  <Text style={styles.defaultAddrText}>Mặc định</Text>
+                </View>
               </View>
-              <Text style={styles.addrDetail}>{addr.detail}</Text>
+              <Text style={styles.addrDetail}>
+                {profile.address}{profile.city ? `, ${profile.city}` : ''}
+              </Text>
             </View>
-          ))}
+          ) : (
+            <View style={{ paddingVertical: 12 }}>
+              <Text style={{ fontSize: 13, color: ArtisanColors.secondary }}>
+                Chưa cập nhật địa chỉ. Nhấn "Cập nhật" để bổ sung địa chỉ nhận hàng.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Settings & Utilities */}
@@ -619,5 +663,68 @@ const styles = StyleSheet.create({
   pressed: {
     transform: [{ scale: 0.98 }],
     opacity: 0.9,
+  },
+  centerLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: ArtisanColors.secondary,
+    fontWeight: '600',
+  },
+  guestContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  guestIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: ArtisanColors.surfaceContainerLow,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  guestTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: ArtisanColors.onSurface,
+  },
+  guestSubtitle: {
+    fontSize: 13,
+    color: ArtisanColors.secondary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  loginCtaBtn: {
+    marginTop: 12,
+    backgroundColor: ArtisanColors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  loginCtaText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 36,
+    backgroundColor: ArtisanColors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitialText: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#ffffff',
   },
 });

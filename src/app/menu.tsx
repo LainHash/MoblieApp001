@@ -1,14 +1,23 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomNavigation } from '@/components/bottom-navigation';
 import { FloatingCartBar } from '@/components/floating-cart-bar';
 import { Icon } from '@/components/icon';
 import { TopHeader } from '@/components/top-header';
-import { CATEGORIES, CURRENT_BRANCH, DISHES } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useBranches } from '@/features/branches';
 import { useCart } from '@/features/cart';
@@ -20,32 +29,32 @@ export default function MenuScreen() {
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const { products } = useProducts({ branchId: activeBranch?.id, keyword: searchQuery });
-  const { categories: backendCategories } = useCategories();
+  const { products, isLoading: isProductsLoading } = useProducts({ branchId: activeBranch?.id, keyword: searchQuery });
+  const { categories: backendCategories, isLoading: isCategoriesLoading } = useCategories();
   const { isFavorite, toggleFavorite } = useWishlist(activeBranch?.id);
   const { totalItemsCount, subtotal, addItem: addToCart } = useCart(activeBranch?.id);
 
+  const isLoading = isProductsLoading || isCategoriesLoading;
+
   const categoryList = backendCategories.length > 0
     ? ['Tất cả', ...backendCategories.map((c) => c.name)]
-    : CATEGORIES;
+    : ['Tất cả'];
 
-  const availableDishes = products.length > 0
-    ? products.map((p) => ({
-        id: p.id,
-        name: p.name,
-        subtitle: p.brandName || p.categoryName || 'Món ngon thủ công',
-        price: p.unitPrice || 0,
-        priceFormatted: (p.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
-        calories: '450 kcal',
-        category: p.categoryName || 'Tất cả',
-        badge: p.stockStatus === 1 ? 'Món Bếp trưởng' : undefined,
-        rating: '4.9',
-        image:
-          p.primaryImage?.image?.url ||
-          'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
-        description: p.description || '',
-      }))
-    : DISHES;
+  const availableDishes = products.map((p) => ({
+    id: p.id,
+    name: p.name,
+    subtitle: p.brandName || p.categoryName || 'Món ngon thủ công',
+    price: p.unitPrice || 0,
+    priceFormatted: (p.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
+    calories: '450 kcal',
+    category: p.categoryName || 'Tất cả',
+    badge: p.stockStatus === 1 ? 'Món Bếp trưởng' : undefined,
+    rating: '4.9',
+    image:
+      p.primaryImage?.image?.url ||
+      'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
+    description: p.description || '',
+  }));
 
   const filteredDishes = availableDishes.filter((dish) => {
     const matchesCategory =
@@ -72,7 +81,7 @@ export default function MenuScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* Top Header */}
       <TopHeader
-        title={activeBranch?.name || CURRENT_BRANCH.name}
+        title={activeBranch?.name || 'Artisan Kitchen'}
         showBranch
         showNotifications
       />
@@ -160,76 +169,93 @@ export default function MenuScreen() {
           <View style={styles.branchBadge}>
             <View style={styles.branchDot} />
             <Text style={styles.branchBadgeText} numberOfLines={1}>
-              {activeBranch?.name || CURRENT_BRANCH.name}
+              {activeBranch?.name || 'Artisan Kitchen'}
             </Text>
           </View>
         </View>
 
         {/* 2-Column Product Grid */}
-        <View style={styles.grid}>
-          {filteredDishes.map((dish) => {
-            const isFav = isFavorite(dish.id);
-            return (
-              <Pressable
-                key={dish.id}
-                onPress={() => router.push({ pathname: '/food-detail', params: { id: dish.id } })}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-                <View style={styles.imageWrap}>
-                  <Image
-                    source={{ uri: dish.image }}
-                    style={styles.dishImage}
-                    contentFit="cover"
-                    transition={200}
-                  />
-
-                  {/* Wishlist Heart */}
-                  <Pressable
-                    accessibilityLabel="Lưu yêu thích"
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      toggleFavorite(dish.id);
-                    }}
-                    style={styles.heartBtn}>
-                    <Icon
-                      name="favorite"
-                      size={17}
-                      color={isFav ? ArtisanColors.primary : ArtisanColors.secondary}
-                      fill={isFav}
+        {isLoading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={ArtisanColors.primary} />
+            <Text style={styles.loadingText}>Đang tải thực đơn từ máy chủ...</Text>
+          </View>
+        ) : filteredDishes.length > 0 ? (
+          <View style={styles.grid}>
+            {filteredDishes.map((dish) => {
+              const isFav = isFavorite(dish.id);
+              return (
+                <Pressable
+                  key={dish.id}
+                  onPress={() => router.push({ pathname: '/food-detail', params: { id: dish.id } })}
+                  style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+                  <View style={styles.imageWrap}>
+                    <Image
+                      source={{ uri: dish.image }}
+                      style={styles.dishImage}
+                      contentFit="cover"
+                      transition={200}
                     />
-                  </Pressable>
 
-                  {/* Calories Badge */}
-                  <View style={styles.calBadge}>
-                    <Icon name="local_fire_department" size={12} color={ArtisanColors.tertiary} fill />
-                    <Text style={styles.calText}>{dish.calories}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.cardContent}>
-                  <Text style={styles.dishName} numberOfLines={1}>
-                    {dish.name}
-                  </Text>
-                  <Text style={styles.dishSub} numberOfLines={1}>
-                    {dish.subtitle}
-                  </Text>
-
-                  <View style={styles.bottomRow}>
-                    <Text style={styles.price}>{dish.priceFormatted}</Text>
+                    {/* Wishlist Heart */}
                     <Pressable
-                      accessibilityLabel={`Thêm ${dish.name} vào giỏ hàng`}
+                      accessibilityLabel="Lưu yêu thích"
                       onPress={(e) => {
                         e.stopPropagation();
-                        handleAddToCart(dish.id, dish.name);
+                        toggleFavorite(dish.id);
                       }}
-                      style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}>
-                      <Icon name="add" size={18} color="#ffffff" />
+                      style={styles.heartBtn}>
+                      <Icon
+                        name="favorite"
+                        size={17}
+                        color={isFav ? ArtisanColors.primary : ArtisanColors.secondary}
+                        fill={isFav}
+                      />
                     </Pressable>
+
+                    {/* Calories Badge */}
+                    <View style={styles.calBadge}>
+                      <Icon name="local_fire_department" size={12} color={ArtisanColors.tertiary} fill />
+                      <Text style={styles.calText}>{dish.calories}</Text>
+                    </View>
                   </View>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.dishName} numberOfLines={1}>
+                      {dish.name}
+                    </Text>
+                    <Text style={styles.dishSub} numberOfLines={1}>
+                      {dish.subtitle}
+                    </Text>
+
+                    <View style={styles.bottomRow}>
+                      <Text style={styles.price}>{dish.priceFormatted}</Text>
+                      <Pressable
+                        accessibilityLabel={`Thêm ${dish.name} vào giỏ hàng`}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleAddToCart(dish.id, dish.name);
+                        }}
+                        style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}>
+                        <Icon name="add" size={18} color="#ffffff" />
+                      </Pressable>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptyWrap}>
+            <Icon name="restaurant_menu" size={44} color={ArtisanColors.outlineVariant} />
+            <Text style={styles.emptyTitle}>Không có món ăn phù hợp</Text>
+            <Text style={styles.emptySub}>
+              {searchQuery
+                ? `Không tìm thấy món ăn nào với từ khóa "${searchQuery}".`
+                : 'Hiện tại chưa có món ăn nào trong danh mục này.'}
+            </Text>
+          </View>
+        )}
 
         <View style={{ height: 120 }} />
       </ScrollView>
@@ -555,5 +581,40 @@ const styles = StyleSheet.create({
   pressed: {
     transform: [{ scale: 0.96 }],
     opacity: 0.9,
+  },
+  loadingWrap: {
+    paddingVertical: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: ArtisanColors.secondary,
+    fontWeight: '600',
+  },
+  emptyWrap: {
+    paddingVertical: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: ArtisanColors.surfaceContainerLowest,
+    borderRadius: 16,
+    marginVertical: 16,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(143, 112, 104, 0.15)',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ArtisanColors.onSurface,
+    marginTop: 4,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: ArtisanColors.secondary,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

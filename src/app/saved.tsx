@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -15,50 +16,41 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomNavigation } from '@/components/bottom-navigation';
 import { Icon } from '@/components/icon';
-import { CURRENT_BRANCH, DISHES } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useBranches } from '@/features/branches';
 import { useCart } from '@/features/cart';
+import { useCategories } from '@/features/catalog';
 import { useWishlist } from '@/features/wishlist';
-
-const CATEGORIES = [
-  { id: 'all', name: 'Tất cả' },
-  { id: 'entrees', name: 'Món chính' },
-  { id: 'pizza', name: 'Pizza lò củi' },
-  { id: 'desserts', name: 'Tráng miệng' },
-  { id: 'beverages', name: 'Đồ uống' },
-];
 
 export default function SavedScreen() {
   const { activeBranch } = useBranches();
-  const { items: wishlistItems, toggleFavorite, moveAllToCart } = useWishlist(activeBranch?.id);
+  const { categories } = useCategories();
+  const { items: wishlistItems, toggleFavorite, moveAllToCart, isLoading } = useWishlist(activeBranch?.id);
   const { addItem: addToCart } = useCart(activeBranch?.id);
 
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [chefSpecialsOnly, setChefSpecialsOnly] = useState(false);
 
-  // Ánh xạ dữ liệu từ backend wishlist hoặc fallback DISHES
-  const savedDishes = wishlistItems.length > 0
-    ? wishlistItems.map((item) => ({
-        id: item.product.id,
-        name: item.product.name,
-        subtitle: item.product.categoryName || item.product.brandName || 'Món ngon thủ công',
-        description: item.product.description || 'Chế biến tỉ mỉ từ nguyên liệu tươi thượng hạng.',
-        price: (item.product.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
-        rawPrice: item.product.unitPrice || 0,
-        rating: '4.9',
-        image:
-          item.product.primaryImage?.image?.url ||
-          'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
-        category: item.product.categoryName || 'Tất cả',
-        isChefSpecial: true,
-      }))
-    : DISHES.map((d) => ({
-        ...d,
-        rawPrice: d.price,
-        price: d.priceFormatted,
-        isChefSpecial: Boolean(d.badge?.includes('Bếp trưởng')),
-      }));
+  const categoryFilters = [
+    { id: 'all', name: 'Tất cả' },
+    ...categories.map((c) => ({ id: c.name, name: c.name })),
+  ];
+
+  // Ánh xạ dữ liệu từ backend wishlist
+  const savedDishes = wishlistItems.map((item) => ({
+    id: item.product.id,
+    name: item.product.name,
+    subtitle: item.product.categoryName || item.product.brandName || 'Món ngon thủ công',
+    description: item.product.description || 'Chế biến tỉ mỉ từ nguyên liệu tươi thượng hạng.',
+    price: (item.product.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
+    rawPrice: item.product.unitPrice || 0,
+    rating: '4.9',
+    image:
+      item.product.primaryImage?.image?.url ||
+      'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
+    category: item.product.categoryName || 'Tất cả',
+    isChefSpecial: true,
+  }));
 
   const filteredDishes = savedDishes.filter((dish) => {
     const matchesCategory =
@@ -119,7 +111,7 @@ export default function SavedScreen() {
           </View>
           <View>
             <Text style={styles.brandTitle}>ARTISAN KITCHEN</Text>
-            <Text style={styles.branchName}>{activeBranch?.name || CURRENT_BRANCH.name}</Text>
+            <Text style={styles.branchName}>{activeBranch?.name || 'Artisan Kitchen'}</Text>
           </View>
         </View>
 
@@ -175,7 +167,7 @@ export default function SavedScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryTrack}>
-          {CATEGORIES.map((cat) => {
+          {categoryFilters.map((cat) => {
             const isSelected = selectedCategory === cat.id;
             return (
               <Pressable
@@ -219,24 +211,31 @@ export default function SavedScreen() {
         </View>
 
         {/* 5. Bulk Action Bar */}
-        <View style={styles.bulkActionBar}>
-          <View>
-            <Text style={styles.bulkTitle}>Sẵn sàng gọi món?</Text>
-            <Text style={styles.bulkSubtitle}>
-              {filteredDishes.length} món sẵn sàng phục vụ • {totalSavedAmount.toLocaleString('vi-VN')} đ
-            </Text>
+        {!isLoading && filteredDishes.length > 0 && (
+          <View style={styles.bulkActionBar}>
+            <View>
+              <Text style={styles.bulkTitle}>Sẵn sàng gọi món?</Text>
+              <Text style={styles.bulkSubtitle}>
+                {filteredDishes.length} món sẵn sàng phục vụ • {totalSavedAmount.toLocaleString('vi-VN')} đ
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleAddAllToCart}
+              style={({ pressed }) => [styles.bulkAddBtn, pressed && styles.pressed]}>
+              <Icon name="shopping_bag" size={18} color="#ffffff" />
+              <Text style={styles.bulkAddBtnText}>Thêm tất cả</Text>
+            </Pressable>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={handleAddAllToCart}
-            style={({ pressed }) => [styles.bulkAddBtn, pressed && styles.pressed]}>
-            <Icon name="shopping_bag" size={18} color="#ffffff" />
-            <Text style={styles.bulkAddBtnText}>Thêm tất cả</Text>
-          </Pressable>
-        </View>
+        )}
 
         {/* 6. Wishlist Food Cards Feed */}
-        {filteredDishes.length === 0 ? (
+        {isLoading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={ArtisanColors.primary} />
+            <Text style={styles.loadingText}>Đang tải danh sách món đã lưu...</Text>
+          </View>
+        ) : filteredDishes.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Icon name="favorite" size={48} color={ArtisanColors.outlineVariant} />
             <Text style={styles.emptyTitle}>Chưa có món yêu thích</Text>
@@ -668,6 +667,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: ArtisanColors.secondary,
   },
   emptyWrap: {
     alignItems: 'center',

@@ -15,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomNavigation } from '@/components/bottom-navigation';
 import { Icon } from '@/components/icon';
-import { CURRENT_BRANCH } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useBranches } from '@/features/branches';
 import { OrderResponse, OrderStatus, OrderTab, useOrders } from '@/features/orders';
@@ -93,7 +92,7 @@ export default function OrdersScreen() {
             <Icon name="storefront" size={20} color={ArtisanColors.primary} fill />
           </View>
           <View>
-            <Text style={styles.branchSubtitle}>{activeBranch?.name || CURRENT_BRANCH.name}</Text>
+            <Text style={styles.branchSubtitle}>{activeBranch?.name || 'Artisan Kitchen'}</Text>
             <Text style={styles.headerTitle}>Đơn của tôi</Text>
           </View>
         </View>
@@ -209,7 +208,7 @@ export default function OrdersScreen() {
                     <View style={styles.branchBox}>
                       <Text style={styles.branchLabel}>CHI NHÁNH</Text>
                       <Text style={styles.branchNameBold}>
-                        {order.branchCode || activeBranch?.name || CURRENT_BRANCH.name}
+                        {order.branchCode || activeBranch?.name || 'Artisan Kitchen'}
                       </Text>
                     </View>
                   </View>
@@ -419,7 +418,7 @@ export default function OrdersScreen() {
 
                 <View style={styles.pastBottomRow}>
                   <Text style={styles.pastBranchNote} numberOfLines={1}>
-                    Chi nhánh: {order.branchCode || activeBranch?.name || CURRENT_BRANCH.name}
+                    Chi nhánh: {order.branchCode || activeBranch?.name || 'Artisan Kitchen'}
                   </Text>
 
                   <Pressable

@@ -12,8 +12,8 @@ interface FloatingCartBarProps {
 }
 
 export function FloatingCartBar({
-  itemCount = 2,
-  subtotal = '415.000 đ',
+  itemCount = 0,
+  subtotal = '0 đ',
   bottomOffset = 76,
 }: FloatingCartBarProps) {
   if (itemCount <= 0) return null;

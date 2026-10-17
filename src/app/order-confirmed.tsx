@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -12,10 +13,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { CURRENT_BRANCH, MOCK_CART } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useBranches } from '@/features/branches';
-import { usePaymentStatusPolling } from '@/features/orders';
+import { ordersService, OrderDetailResponse, usePaymentStatusPolling } from '@/features/orders';
 
 export default function OrderConfirmedScreen() {
   const { orderId, orderCode, qrUrl, amount, transferContent } = useLocalSearchParams<{
@@ -28,7 +28,37 @@ export default function OrderConfirmedScreen() {
 
   const { activeBranch } = useBranches();
   const [copied, setCopied] = useState(false);
-  const orderRef = orderCode ? `#${orderCode}` : '#AK-89241';
+  const [orderDetail, setOrderDetail] = useState<OrderDetailResponse | null>(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(Boolean(orderId));
+
+  const orderRef = orderCode ? `#${orderCode}` : orderId ? `#${orderId.slice(0, 8).toUpperCase()}` : '#AK-ORDER';
+
+  useEffect(() => {
+    let ignore = false;
+    if (!orderId) {
+      setIsLoadingDetail(false);
+      return;
+    }
+    async function loadOrder() {
+      try {
+        setIsLoadingDetail(true);
+        const res = await ordersService.getOrderById(orderId!);
+        if (!ignore) {
+          setOrderDetail(res);
+        }
+      } catch {
+        // Fallback to params
+      } finally {
+        if (!ignore) {
+          setIsLoadingDetail(false);
+        }
+      }
+    }
+    loadOrder();
+    return () => {
+      ignore = true;
+    };
+  }, [orderId]);
 
   const { isPaid, isPolling } = usePaymentStatusPolling({
     orderId,
@@ -40,7 +70,9 @@ export default function OrderConfirmedScreen() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const total = amount ? Number(amount) : MOCK_CART.reduce((sum, it) => sum + it.price * it.quantity, 0) - 60000;
+  const total = amount
+    ? Number(amount)
+    : orderDetail?.totalAmount || 0;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -48,7 +80,7 @@ export default function OrderConfirmedScreen() {
       <View style={styles.topBar}>
         <View style={styles.topBarLeft}>
           <Icon name="storefront" size={22} color={ArtisanColors.primary} fill />
-          <Text style={styles.topBarTitle}>{activeBranch?.name || CURRENT_BRANCH.name}</Text>
+          <Text style={styles.topBarTitle}>{activeBranch?.name || 'Artisan Kitchen'}</Text>
         </View>
         <Pressable
           accessibilityLabel="Trang chủ"
@@ -203,27 +235,45 @@ export default function OrderConfirmedScreen() {
         {/* Order Summary Preview */}
         <View style={styles.infoCard}>
           <View style={styles.summaryTitleRow}>
-            <Text style={styles.cardHeaderTitle}>Chi tiết đơn hàng ({MOCK_CART.length} món)</Text>
+            <Text style={styles.cardHeaderTitle}>
+              Chi tiết đơn hàng {orderDetail ? `(${orderDetail.orderItems?.length || 0} món)` : ''}
+            </Text>
             <Text style={styles.tablewareText}>Bao gồm dụng cụ ăn</Text>
           </View>
 
-          <View style={styles.orderItemsList}>
-            {MOCK_CART.map((item) => (
-              <View key={item.id} style={styles.summaryItemRow}>
-                <Text style={styles.summaryItemName}>
-                  {item.quantity}x {item.name}
-                </Text>
-                <Text style={styles.summaryItemPrice}>
-                  {(item.price * item.quantity).toLocaleString('vi-VN')} đ
-                </Text>
+          {isLoadingDetail ? (
+            <View style={{ paddingVertical: 16, alignItems: 'center', gap: 6 }}>
+              <ActivityIndicator size="small" color={ArtisanColors.primary} />
+              <Text style={{ fontSize: 13, color: ArtisanColors.secondary }}>
+                Đang tải chi tiết đơn hàng...
+              </Text>
+            </View>
+          ) : orderDetail?.orderItems && orderDetail.orderItems.length > 0 ? (
+            <View style={styles.orderItemsList}>
+              {orderDetail.orderItems.map((item, idx) => (
+                <View key={item.id || idx} style={styles.summaryItemRow}>
+                  <Text style={styles.summaryItemName}>
+                    {item.quantity}x {item.productName || `Món ăn #${idx + 1}`}
+                  </Text>
+                  <Text style={styles.summaryItemPrice}>
+                    {(item.total || (item.unitPrice || 0) * (item.quantity || 1)).toLocaleString('vi-VN')} đ
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.orderItemsList}>
+              <View style={styles.summaryItemRow}>
+                <Text style={styles.summaryItemName}>Đơn đặt món trực tuyến</Text>
+                <Text style={styles.summaryItemPrice}>{total.toLocaleString('vi-VN')} đ</Text>
               </View>
-            ))}
-          </View>
+            </View>
+          )}
 
           <View style={styles.divider} />
 
           <View style={styles.summaryItemRow}>
-            <Text style={styles.paidLabel}>Tổng đã thanh toán</Text>
+            <Text style={styles.paidLabel}>Tổng thanh toán</Text>
             <Text style={styles.paidTotal}>{total.toLocaleString('vi-VN')} đ</Text>
           </View>
         </View>

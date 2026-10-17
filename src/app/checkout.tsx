@@ -4,44 +4,48 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { CURRENT_BRANCH, MOCK_CART, MOCK_USER } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useBranches } from '@/features/branches';
 import { useCart } from '@/features/cart';
 import { useCheckout } from '@/features/orders';
+import { useUserProfile } from '@/features/user';
 
 export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const { activeBranch } = useBranches();
-  const { items: liveCartItems, subtotal: apiSubtotal } = useCart(activeBranch?.id);
+  const { items: liveCartItems, subtotal: apiSubtotal, isLoading: isCartLoading } = useCart(activeBranch?.id);
+  const { user, profile } = useUserProfile();
   const { submitOrder, isSubmitting } = useCheckout();
 
   const [showItemDetails, setShowItemDetails] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'card' | 'qr' | 'cash'>('qr');
 
-  const cartItems = liveCartItems.length > 0
-    ? liveCartItems.map((it) => ({
-        id: it.product.id,
-        dishId: it.product.id,
-        name: it.product.name,
-        customization: it.product.categoryName || 'Món chính',
-        price: it.product.unitPrice || 0,
-        basePrice: it.product.unitPrice || 0,
-        quantity: it.quantity,
-        image:
-          it.product.primaryImage?.image?.url ||
-          'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
-      }))
-    : MOCK_CART;
+  const cartItems = liveCartItems.map((it) => ({
+    id: it.product.id,
+    dishId: it.product.id,
+    name: it.product.name,
+    customization: it.product.categoryName || 'Món chính',
+    price: it.product.unitPrice || 0,
+    basePrice: it.product.unitPrice || 0,
+    quantity: it.quantity,
+    image:
+      it.product.primaryImage?.image?.url ||
+      'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
+  }));
 
-  const subtotal = liveCartItems.length > 0
-    ? apiSubtotal
-    : cartItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
-
-  const discount = 60000;
+  const subtotal = apiSubtotal;
+  const discount = 0;
   const tax = Math.round(subtotal * 0.08);
   const tip = Math.round(subtotal * 0.15);
   const total = Math.max(0, subtotal - discount + tax + tip);
+
+  const receiverName = profile
+    ? `${profile.lastName} ${profile.firstName}`.trim()
+    : user?.userName || 'Quý khách';
+  const receiverPhone = profile?.phone || 'Chưa cập nhật';
+  const deliveryAddress = profile?.address
+    ? `${profile.address}${profile.city ? `, ${profile.city}` : ''}`
+    : activeBranch?.address || 'Tại nhà hàng';
 
   const handleConfirmOrder = async () => {
     try {
@@ -52,7 +56,7 @@ export default function CheckoutScreen() {
 
       const res = await submitOrder({
         branchId: activeBranch?.id || '00000000-0000-0000-0000-000000000000',
-        deliveryAddress: MOCK_USER.addresses[0]?.detail || 'Tại nhà hàng',
+        deliveryAddress,
         note: 'Đơn đặt từ ứng dụng Mobile',
         deliveryFee: 15000,
         items: orderItems.length > 0 ? orderItems : undefined,
@@ -71,11 +75,7 @@ export default function CheckoutScreen() {
     } catch (err) {
       Alert.alert(
         'Lỗi đặt hàng',
-        err instanceof Error ? err.message : 'Không thể kết nối đến máy chủ. Bạn có muốn xem thử màn hình xác nhận đơn hàng không?',
-        [
-          { text: 'Hủy', style: 'cancel' },
-          { text: 'Xem thử đơn', onPress: () => router.replace('/order-confirmed') },
-        ]
+        err instanceof Error ? err.message : 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.'
       );
     }
   };
@@ -119,9 +119,9 @@ export default function CheckoutScreen() {
                   <Text style={styles.readyText}>Sẵn sàng trong 15-20 phút</Text>
                 </View>
               </View>
-              <Text style={styles.branchName}>{CURRENT_BRANCH.name}</Text>
+              <Text style={styles.branchName}>{activeBranch?.name || 'Chi nhánh nhà hàng'}</Text>
               <Text style={styles.branchAddress}>
-                720A Điện Biên Phủ, Phường 22, Bình Thạnh, TP.HCM
+                {activeBranch?.address ? `${activeBranch.address}${activeBranch.city ? `, ${activeBranch.city}` : ''}` : 'Địa chỉ chi nhánh đang cập nhật'}
               </Text>
             </View>
           </View>
@@ -135,7 +135,7 @@ export default function CheckoutScreen() {
             <View style={styles.titleWithCount}>
               <Text style={styles.cardTitle}>Món ăn đã chọn</Text>
               <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText}>{MOCK_CART.length} món</Text>
+                <Text style={styles.countBadgeText}>{cartItems.length} món</Text>
               </View>
             </View>
             <View style={styles.detailToggle}>
@@ -152,7 +152,7 @@ export default function CheckoutScreen() {
 
           {showItemDetails && (
             <View style={styles.itemsList}>
-              {MOCK_CART.map((item) => (
+              {cartItems.map((item) => (
                 <View key={item.id} style={styles.itemRow}>
                   <View style={styles.itemQtyBadge}>
                     <Text style={styles.itemQtyText}>{item.quantity}x</Text>
@@ -184,14 +184,14 @@ export default function CheckoutScreen() {
               <Icon name="person" size={18} color={ArtisanColors.secondary} />
               <View>
                 <Text style={styles.contactLabel}>Họ và tên</Text>
-                <Text style={styles.contactVal}>{MOCK_USER.name}</Text>
+                <Text style={styles.contactVal}>{receiverName}</Text>
               </View>
             </View>
             <View style={styles.contactItem}>
               <Icon name="call" size={18} color={ArtisanColors.secondary} />
               <View>
                 <Text style={styles.contactLabel}>Số điện thoại</Text>
-                <Text style={styles.contactVal}>{MOCK_USER.phone}</Text>
+                <Text style={styles.contactVal}>{receiverPhone}</Text>
               </View>
             </View>
           </View>
@@ -203,23 +203,17 @@ export default function CheckoutScreen() {
 
           {[
             {
-              id: 'wallet',
-              title: 'Ví ẩm thực Artisan Kitchen',
-              sub: `Số dư khả dụng: ${MOCK_USER.walletBalance}`,
-              icon: 'account_balance_wallet',
+              id: 'qr',
+              title: 'Chuyển khoản VietQR / Ngân hàng',
+              sub: 'Tạo mã VietQR quét thanh toán tức thì',
+              icon: 'qr_code_2',
               badge: 'Khuyên dùng',
             },
             {
-              id: 'card',
-              title: 'Thẻ tín dụng / Ghi nợ quốc tế',
-              sub: 'Visa •••• 8829',
-              icon: 'credit_card',
-            },
-            {
-              id: 'qr',
-              title: 'Chuyển khoản VietQR / MoMo',
-              sub: 'Quét mã thanh toán tức thì',
-              icon: 'qr_code_2',
+              id: 'wallet',
+              title: 'Ví thành viên',
+              sub: user?.roleName ? `Tài khoản (${user.roleName})` : 'Tài khoản thành viên',
+              icon: 'account_balance_wallet',
             },
             {
               id: 'cash',

@@ -25,6 +25,9 @@ export function useUserProfile() {
       }
       const userData = await userService.getMe();
       setUser(userData);
+      if (userData?.personalProfile) {
+        setProfile(userData.personalProfile);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải thông tin tài khoản');
     } finally {
@@ -47,6 +50,9 @@ export function useUserProfile() {
         const userData = await userService.getMe();
         if (!ignore) {
           setUser(userData);
+          if (userData?.personalProfile) {
+            setProfile(userData.personalProfile);
+          }
           setError(null);
         }
       } catch (err) {

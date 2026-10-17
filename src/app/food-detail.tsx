@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -14,7 +15,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { CURRENT_BRANCH, DISHES } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useBranches } from '@/features/branches';
 import { useCart } from '@/features/cart';
@@ -25,64 +25,77 @@ export default function FoodDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { activeBranch } = useBranches();
-  const { product } = useProductDetail(id, activeBranch?.id);
+  const { product, isLoading, error } = useProductDetail(id, activeBranch?.id);
   const { isFavorite, toggleFavorite } = useWishlist(activeBranch?.id);
   const { addItem: addToCart } = useCart(activeBranch?.id);
 
-  // Món ăn hiện tại từ API hoặc fallback mock
-  const fallbackDish = DISHES.find((d) => d.id === id) || DISHES[0];
-  const dish = product
-    ? {
-        id: product.id,
-        name: product.name,
-        subtitle: product.categoryName || product.brandName || 'Món ngon thủ công',
-        price: product.unitPrice || 0,
-        priceFormatted: (product.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
-        calories: '450 kcal',
-        category: product.categoryName || 'Món chính',
-        rating: '4.9',
-        image:
-          product.primaryImage?.image?.url ||
-          product.productImages?.[0]?.image?.url ||
-          fallbackDish.image,
-        description: product.description || fallbackDish.description,
-        dietary: fallbackDish.dietary,
-        bunOptions: fallbackDish.bunOptions,
-        donenessOptions: fallbackDish.donenessOptions,
-        addOns: fallbackDish.addOns,
-      }
-    : fallbackDish;
-
-  const [selectedBun, setSelectedBun] = useState(dish.bunOptions?.[0]?.label || '');
-  const [selectedDoneness, setSelectedDoneness] = useState(dish.donenessOptions?.[0]?.label || '');
-  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([
-    dish.addOns?.[0]?.name || '',
-  ]);
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
 
-  const isFav = isFavorite(dish.id);
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.centerContainer} edges={['top']}>
+        <View style={styles.topBar}>
+          <Pressable
+            accessibilityLabel="Quay lại"
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.topIconBtn, pressed && styles.pressed]}>
+            <Icon name="arrow_back" size={20} color={ArtisanColors.onSurface} />
+          </Pressable>
+        </View>
+        <View style={styles.centerWrap}>
+          <ActivityIndicator size="large" color={ArtisanColors.primary} />
+          <Text style={styles.centerLoadingText}>Đang tải chi tiết món ăn...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  const toggleAddOn = (name: string) => {
-    if (selectedAddOns.includes(name)) {
-      setSelectedAddOns(selectedAddOns.filter((item) => item !== name));
-    } else {
-      setSelectedAddOns([...selectedAddOns, name]);
-    }
+  if (!product) {
+    return (
+      <SafeAreaView style={styles.centerContainer} edges={['top']}>
+        <View style={styles.topBar}>
+          <Pressable
+            accessibilityLabel="Quay lại"
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.topIconBtn, pressed && styles.pressed]}>
+            <Icon name="arrow_back" size={20} color={ArtisanColors.onSurface} />
+          </Pressable>
+        </View>
+        <View style={styles.centerWrap}>
+          <Icon name="error_outline" size={48} color={ArtisanColors.outlineVariant} />
+          <Text style={styles.centerTitleText}>Không tìm thấy món ăn</Text>
+          <Text style={styles.centerSubText}>
+            {error || 'Món ăn này có thể không tồn tại hoặc đã ngừng phục vụ.'}
+          </Text>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
+            <Text style={styles.backBtnText}>Quay lại thực đơn</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const dish = {
+    id: product.id,
+    name: product.name,
+    subtitle: product.categoryName || product.brandName || 'Món ngon thủ công',
+    price: product.unitPrice || 0,
+    priceFormatted: (product.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
+    rating: '4.9',
+    image:
+      product.primaryImage?.image?.url ||
+      product.productImages?.[0]?.image?.url ||
+      'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
+    description: product.description || 'Chế biến tươi mới mỗi ngày bởi đội ngũ bếp trưởng.',
   };
 
+  const isFav = isFavorite(dish.id);
+
   const calculateTotal = () => {
-    let price = dish.price;
-    const bun = dish.bunOptions?.find((b) => b.label === selectedBun);
-    if (bun) price += bun.extra;
-
-    dish.addOns?.forEach((a) => {
-      if (selectedAddOns.includes(a.name)) {
-        price += a.price;
-      }
-    });
-
-    const total = price * quantity;
+    const total = dish.price * quantity;
     return total.toLocaleString('vi-VN') + ' đ';
   };
 
@@ -168,7 +181,7 @@ export default function FoodDetailScreen() {
           <View style={styles.statusTile}>
             <Icon name="storefront" size={18} color={ArtisanColors.primary} fill />
             <Text style={styles.statusTileText}>
-              Có sẵn tại {activeBranch?.name || CURRENT_BRANCH.name} • Chuẩn bị ~15-20 phút
+              Có sẵn tại {activeBranch?.name || 'Artisan Kitchen'} • Đặt món trực tuyến
             </Text>
           </View>
 
@@ -181,119 +194,27 @@ export default function FoodDetailScreen() {
               <Icon name="star" size={16} color={ArtisanColors.primary} fill />
               <Text style={styles.infoBadgeText}>{dish.rating}</Text>
             </View>
-            {dish.dietary?.map((diet, idx) => (
-              <View key={idx} style={styles.infoBadge}>
-                <Icon
-                  name={idx === 0 ? 'verified' : 'check_circle'}
-                  size={16}
-                  color={idx === 0 ? ArtisanColors.outline : ArtisanColors.tertiary}
-                  fill
-                />
-                <Text
-                  style={[
-                    styles.infoBadgeText,
-                    idx !== 0 && { color: ArtisanColors.tertiary },
-                  ]}>
-                  {diet}
+            {product.categoryName && (
+              <View style={styles.infoBadge}>
+                <Icon name="restaurant_menu" size={16} color={ArtisanColors.tertiary} fill />
+                <Text style={[styles.infoBadgeText, { color: ArtisanColors.tertiary }]}>
+                  {product.categoryName}
                 </Text>
               </View>
-            ))}
+            )}
+            {product.brandName && (
+              <View style={styles.infoBadge}>
+                <Icon name="verified" size={16} color={ArtisanColors.primary} fill />
+                <Text style={styles.infoBadgeText}>{product.brandName}</Text>
+              </View>
+            )}
           </ScrollView>
 
           {/* Culinary Composition / Description */}
           <View style={styles.descCard}>
-            <Text style={styles.descTitle}>THÀNH PHẦN NGHỆ THUẬT ẨM THỰC</Text>
+            <Text style={styles.descTitle}>THÔNG TIN & THÀNH PHẦN MÓN ĂN</Text>
             <Text style={styles.descText}>{dish.description}</Text>
           </View>
-
-          {/* Section 1: Bun Choice */}
-          {dish.bunOptions && dish.bunOptions.length > 0 && (
-            <View style={styles.customSection}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.sectionHeaderTitle}>Chọn loại vỏ bánh</Text>
-                <Text style={styles.sectionRequired}>Bắt buộc • Chọn 1</Text>
-              </View>
-
-              {dish.bunOptions.map((opt) => {
-                const isSelected = selectedBun === opt.label;
-                return (
-                  <Pressable
-                    key={opt.label}
-                    onPress={() => setSelectedBun(opt.label)}
-                    style={[styles.optionRow, isSelected && styles.optionRowSelected]}>
-                    <View style={styles.radioOuter}>
-                      {isSelected && <View style={styles.radioInner} />}
-                    </View>
-                    <View style={styles.optionTextWrap}>
-                      <Text style={styles.optionLabel}>{opt.label}</Text>
-                      <Text style={styles.optionSub}>{opt.sub}</Text>
-                    </View>
-                    {opt.extra > 0 && (
-                      <Text style={styles.extraPrice}>
-                        +{opt.extra.toLocaleString('vi-VN')} đ
-                      </Text>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Section 2: Doneness */}
-          {dish.donenessOptions && dish.donenessOptions.length > 0 && (
-            <View style={styles.customSection}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.sectionHeaderTitle}>Độ chín của thịt</Text>
-                <Text style={styles.sectionRequired}>Tùy chọn • Chọn 1</Text>
-              </View>
-
-              {dish.donenessOptions.map((opt) => {
-                const isSelected = selectedDoneness === opt.label;
-                return (
-                  <Pressable
-                    key={opt.label}
-                    onPress={() => setSelectedDoneness(opt.label)}
-                    style={[styles.optionRow, isSelected && styles.optionRowSelected]}>
-                    <View style={styles.radioOuter}>
-                      {isSelected && <View style={styles.radioInner} />}
-                    </View>
-                    <View style={styles.optionTextWrap}>
-                      <Text style={styles.optionLabel}>{opt.label}</Text>
-                      <Text style={styles.optionSub}>{opt.note}</Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Section 3: Artisan Add-ons */}
-          {dish.addOns && dish.addOns.length > 0 && (
-            <View style={styles.customSection}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.sectionHeaderTitle}>Món ăn kèm & Topping thêm</Text>
-                <Text style={styles.sectionRequired}>Tùy chọn thêm</Text>
-              </View>
-
-              {dish.addOns.map((opt) => {
-                const isSelected = selectedAddOns.includes(opt.name);
-                return (
-                  <Pressable
-                    key={opt.name}
-                    onPress={() => toggleAddOn(opt.name)}
-                    style={[styles.optionRow, isSelected && styles.optionRowSelected]}>
-                    <View style={[styles.checkOuter, isSelected && styles.checkOuterSelected]}>
-                      {isSelected && <Icon name="check_circle" size={16} color="#ffffff" fill />}
-                    </View>
-                    <View style={styles.optionTextWrap}>
-                      <Text style={styles.optionLabel}>{opt.name}</Text>
-                    </View>
-                    <Text style={styles.extraPrice}>{opt.priceFormatted}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
 
           {/* Chef Instructions */}
           <View style={styles.customSection}>
@@ -680,5 +601,55 @@ const styles = StyleSheet.create({
   pressed: {
     transform: [{ scale: 0.97 }],
     opacity: 0.9,
+  },
+  centerContainer: {
+    flex: 1,
+    backgroundColor: ArtisanColors.background,
+    ...Platform.select({
+      web: {
+        maxWidth: 520,
+        marginHorizontal: 'auto' as any,
+        width: '100%',
+        minHeight: '100vh' as any,
+      },
+    }),
+  },
+  centerWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  centerLoadingText: {
+    fontSize: 14,
+    color: ArtisanColors.secondary,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  centerTitleText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: ArtisanColors.onSurface,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  centerSubText: {
+    fontSize: 13,
+    color: ArtisanColors.secondary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  backBtn: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: ArtisanColors.primary,
+  },
+  backBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -14,7 +15,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Icon } from '@/components/icon';
 import { TopHeader } from '@/components/top-header';
-import { CURRENT_BRANCH, MOCK_CART } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useBranches } from '@/features/branches';
 import { useCart } from '@/features/cart';
@@ -27,27 +27,26 @@ export default function CartScreen() {
     updateQuantity: apiUpdateQuantity,
     removeItem: apiRemoveItem,
     subtotal: apiSubtotal,
+    isLoading,
   } = useCart(activeBranch?.id);
 
   const [selectedTip, setSelectedTip] = useState('15%');
   const [promoCode, setPromoCode] = useState('TRUFFLE25');
-  const [promoApplied, setPromoApplied] = useState(true);
+  const [promoApplied, setPromoApplied] = useState(false);
 
-  // Ánh xạ danh sách món trong giỏ từ backend hoặc fallback
-  const cartItems = liveCartItems.length > 0
-    ? liveCartItems.map((it) => ({
-        id: it.product.id,
-        dishId: it.product.id,
-        name: it.product.name,
-        customization: it.product.categoryName || 'Món chính',
-        price: it.product.unitPrice || 0,
-        basePrice: it.product.unitPrice || 0,
-        quantity: it.quantity,
-        image:
-          it.product.primaryImage?.image?.url ||
-          'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
-      }))
-    : MOCK_CART;
+  // Ánh xạ danh sách món trong giỏ từ backend
+  const cartItems = liveCartItems.map((it) => ({
+    id: it.product.id,
+    dishId: it.product.id,
+    name: it.product.name,
+    customization: it.product.categoryName || 'Món chính',
+    price: it.product.unitPrice || 0,
+    basePrice: it.product.unitPrice || 0,
+    quantity: it.quantity,
+    image:
+      it.product.primaryImage?.image?.url ||
+      'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
+  }));
 
   const updateQuantity = async (id: string, delta: number) => {
     const it = cartItems.find((item) => item.id === id);
@@ -69,12 +68,11 @@ export default function CartScreen() {
   };
 
   const clearCart = () => {
-    // Có thể xóa từng item
+    // Xóa lần lượt các item
+    cartItems.forEach((it) => removeItem(it.id));
   };
 
-  const subtotal = liveCartItems.length > 0
-    ? apiSubtotal
-    : cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = apiSubtotal;
 
   const discount = promoApplied && subtotal > 0 ? 60000 : 0;
   const tipPercent = selectedTip === '10%' ? 0.1 : selectedTip === '15%' ? 0.15 : selectedTip === '20%' ? 0.2 : 0;
@@ -86,7 +84,7 @@ export default function CartScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* Top Header */}
       <TopHeader
-        title={activeBranch?.name || CURRENT_BRANCH.name}
+        title={activeBranch?.name || 'Artisan Kitchen'}
         showBack
         showBranch={false}
         showNotifications
@@ -122,17 +120,22 @@ export default function CartScreen() {
                 <Text style={styles.branchBannerLabel}>ĐIỂM NHẬN MÓN</Text>
               </View>
               <Text style={styles.branchBannerName} numberOfLines={1}>
-                {CURRENT_BRANCH.name} <Text style={styles.branchTime}>({CURRENT_BRANCH.prepTime})</Text>
+                {activeBranch?.name || 'Chi nhánh nhà hàng'} <Text style={styles.branchTime}>(Đang phục vụ)</Text>
               </Text>
             </View>
           </View>
-          <Pressable style={styles.changeBranchBtn}>
-            <Text style={styles.changeBranchText}>Đổi chi nhánh</Text>
+          <Pressable style={styles.changeBranchBtn} onPress={() => router.push('/menu')}>
+            <Text style={styles.changeBranchText}>Thực đơn</Text>
           </Pressable>
         </View>
 
         {/* Cart Items List */}
-        {cartItems.length === 0 ? (
+        {isLoading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={ArtisanColors.primary} />
+            <Text style={styles.loadingText}>Đang tải giỏ hàng từ máy chủ...</Text>
+          </View>
+        ) : cartItems.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Icon name="shopping_bag" size={54} color={ArtisanColors.outlineVariant} />
             <Text style={styles.emptyTitle}>Giỏ hàng đang trống</Text>
@@ -748,5 +751,16 @@ const styles = StyleSheet.create({
   pressed: {
     transform: [{ scale: 0.97 }],
     opacity: 0.9,
+  },
+  loadingWrap: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: ArtisanColors.secondary,
+    fontWeight: '600',
   },
 });

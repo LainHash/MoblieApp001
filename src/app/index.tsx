@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -18,7 +19,6 @@ import { BottomNavigation } from '@/components/bottom-navigation';
 import { FloatingCartBar } from '@/components/floating-cart-bar';
 import { Icon } from '@/components/icon';
 import { TopHeader } from '@/components/top-header';
-import { CATEGORIES, CURRENT_BRANCH, DISHES, MOCK_USER } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useBranches } from '@/features/branches';
 import { useCart } from '@/features/cart';
@@ -27,36 +27,34 @@ import { useUserProfile } from '@/features/user';
 
 export default function HomeScreen() {
   const { activeBranch, branches, selectBranch } = useBranches();
-  const { products, categories: backendCategories, isRefreshing, onRefresh } = useHome(activeBranch?.id);
+  const { products, categories: backendCategories, isRefreshing, onRefresh, isLoading } = useHome(activeBranch?.id);
   const { totalItemsCount, subtotal, addItem: addToCart } = useCart(activeBranch?.id);
   const { user } = useUserProfile();
 
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Danh mục kết hợp từ backend hoặc fallback
+  // Danh mục từ backend
   const categoryList = backendCategories.length > 0
     ? ['Tất cả', ...backendCategories.map((c) => c.name)]
-    : CATEGORIES;
+    : ['Tất cả'];
 
-  // Dữ liệu món ăn từ backend hoặc fallback DISHES
-  const availableDishes = products.length > 0
-    ? products.map((p) => ({
-        id: p.id,
-        name: p.name,
-        subtitle: p.brandName || p.categoryName || 'Món ngon thủ công',
-        price: p.unitPrice || 0,
-        priceFormatted: (p.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
-        calories: '450 kcal',
-        category: p.categoryName || 'Món chính',
-        badge: p.stockStatus === 1 ? 'Món Bếp trưởng' : undefined,
-        rating: '4.9',
-        image:
-          p.primaryImage?.image?.url ||
-          'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
-        description: p.description || '',
-      }))
-    : DISHES;
+  // Dữ liệu món ăn từ backend
+  const availableDishes = products.map((p) => ({
+    id: p.id,
+    name: p.name,
+    subtitle: p.brandName || p.categoryName || 'Món ngon thủ công',
+    price: p.unitPrice || 0,
+    priceFormatted: (p.unitPrice || 0).toLocaleString('vi-VN') + ' đ',
+    calories: '450 kcal',
+    category: p.categoryName || 'Món chính',
+    badge: p.stockStatus === 1 ? 'Món Bếp trưởng' : undefined,
+    rating: '4.9',
+    image:
+      p.primaryImage?.image?.url ||
+      'https://images.unsplash.com/photo-1546549032-9571cd6b27df?auto=format&fit=crop&w=600&q=80',
+    description: p.description || '',
+  }));
 
   const filteredDishes = availableDishes.filter((dish) => {
     const matchesCategory =
@@ -101,7 +99,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* Top App Bar */}
       <TopHeader
-        title={activeBranch?.name || CURRENT_BRANCH.name}
+        title={activeBranch?.name || 'Artisan Kitchen'}
         showBranch
         showNotifications
       />
@@ -121,19 +119,20 @@ export default function HomeScreen() {
           <View style={styles.greetingLeft}>
             <Text style={styles.greetingSub}>BẢO CHỨNG ẨM THỰC</Text>
             <Text style={styles.greetingTitle}>
-              Chào buổi tối, {user?.userName || 'Alex'} <Text style={styles.waveEmoji}>👋</Text>
+              {user?.userName ? `Chào ${user.userName}` : 'Chào buổi tối'} <Text style={styles.waveEmoji}>👋</Text>
             </Text>
           </View>
           <Pressable
             accessibilityLabel="Hồ sơ cá nhân"
             onPress={() => router.push('/profile')}
             style={({ pressed }) => [styles.avatarRing, pressed && styles.pressed]}>
-            <Image
-              source={{ uri: MOCK_USER.avatar }}
-              style={styles.avatarImage}
-              contentFit="cover"
-              transition={200}
-            />
+            <View style={styles.avatarInner}>
+              {user?.userName ? (
+                <Text style={styles.avatarInitial}>{user.userName.charAt(0).toUpperCase()}</Text>
+              ) : (
+                <Icon name="person" size={24} color="#ffffff" />
+              )}
+            </View>
           </Pressable>
         </View>
 
@@ -145,12 +144,18 @@ export default function HomeScreen() {
             </View>
             <View style={styles.branchInfo}>
               <Text style={styles.branchCardTitle}>
-                {activeBranch?.name || 'Chi nhánh Trung tâm Flagship'}
+                {activeBranch?.name || 'Đang kết nối chi nhánh...'}
               </Text>
               <View style={styles.branchCardMeta}>
-                <Text style={styles.metaDistance}>{CURRENT_BRANCH.distance}</Text>
-                <View style={styles.metaDot} />
-                <Text style={styles.metaStatus}>{CURRENT_BRANCH.status}</Text>
+                <Text style={styles.metaDistance}>
+                  {activeBranch?.address ? `${activeBranch.address}${activeBranch.city ? `, ${activeBranch.city}` : ''}` : 'Nhà hàng thủ công'}
+                </Text>
+                {activeBranch?.phone ? (
+                  <>
+                    <View style={styles.metaDot} />
+                    <Text style={styles.metaStatus}>{activeBranch.phone}</Text>
+                  </>
+                ) : null}
               </View>
             </View>
           </View>
@@ -269,52 +274,69 @@ export default function HomeScreen() {
         </View>
 
         {/* 2-Column Product Grid */}
-        <View style={styles.dishGrid}>
-          {filteredDishes.map((dish) => (
-            <Pressable
-              key={dish.id}
-              accessibilityRole="button"
-              accessibilityLabel={dish.name}
-              onPress={() => router.push({ pathname: '/food-detail', params: { id: dish.id } })}
-              style={({ pressed }) => [styles.dishCard, pressed && styles.pressed]}>
-              <View style={styles.dishImageWrap}>
-                <Image
-                  source={{ uri: dish.image }}
-                  style={styles.dishImage}
-                  contentFit="cover"
-                  transition={200}
-                />
-                {dish.badge && (
-                  <View style={styles.dishBadge}>
-                    <Text style={styles.dishBadgeText}>{dish.badge}</Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.dishDetails}>
-                <Text style={styles.dishName} numberOfLines={1}>
-                  {dish.name}
-                </Text>
-                <Text style={styles.dishSub} numberOfLines={1}>
-                  {dish.subtitle}
-                </Text>
-
-                <View style={styles.dishBottomRow}>
-                  <Text style={styles.dishPrice}>{dish.priceFormatted}</Text>
-                  <Pressable
-                    accessibilityLabel={`Thêm ${dish.name} vào giỏ`}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleAddToCart(dish.id, dish.name);
-                    }}
-                    style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}>
-                    <Icon name="add" size={18} color={ArtisanColors.onSurface} />
-                  </Pressable>
+        {isLoading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={ArtisanColors.primary} />
+            <Text style={styles.loadingText}>Đang tải món ăn từ máy chủ...</Text>
+          </View>
+        ) : filteredDishes.length > 0 ? (
+          <View style={styles.dishGrid}>
+            {filteredDishes.map((dish) => (
+              <Pressable
+                key={dish.id}
+                accessibilityRole="button"
+                accessibilityLabel={dish.name}
+                onPress={() => router.push({ pathname: '/food-detail', params: { id: dish.id } })}
+                style={({ pressed }) => [styles.dishCard, pressed && styles.pressed]}>
+                <View style={styles.dishImageWrap}>
+                  <Image
+                    source={{ uri: dish.image }}
+                    style={styles.dishImage}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                  {dish.badge && (
+                    <View style={styles.dishBadge}>
+                      <Text style={styles.dishBadgeText}>{dish.badge}</Text>
+                    </View>
+                  )}
                 </View>
-              </View>
-            </Pressable>
-          ))}
-        </View>
+
+                <View style={styles.dishDetails}>
+                  <Text style={styles.dishName} numberOfLines={1}>
+                    {dish.name}
+                  </Text>
+                  <Text style={styles.dishSub} numberOfLines={1}>
+                    {dish.subtitle}
+                  </Text>
+
+                  <View style={styles.dishBottomRow}>
+                    <Text style={styles.dishPrice}>{dish.priceFormatted}</Text>
+                    <Pressable
+                      accessibilityLabel={`Thêm ${dish.name} vào giỏ`}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleAddToCart(dish.id, dish.name);
+                      }}
+                      style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}>
+                      <Icon name="add" size={18} color={ArtisanColors.onSurface} />
+                    </Pressable>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyWrap}>
+            <Icon name="restaurant_menu" size={40} color={ArtisanColors.outlineVariant} />
+            <Text style={styles.emptyTitle}>Chưa có món ăn nào</Text>
+            <Text style={styles.emptySub}>
+              {searchQuery
+                ? 'Không tìm thấy món ăn phù hợp với từ khóa.'
+                : 'Thực đơn của chi nhánh đang được cập nhật từ máy chủ.'}
+            </Text>
+          </View>
+        )}
 
         {/* Culinary Narrative Callout */}
         <View style={styles.narrativeCard}>
@@ -770,5 +792,55 @@ const styles = StyleSheet.create({
   pressed: {
     transform: [{ scale: 0.96 }],
     opacity: 0.9,
+  },
+  avatarInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
+    backgroundColor: ArtisanColors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  loadingWrap: {
+    paddingVertical: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: ArtisanColors.secondary,
+    fontWeight: '600',
+  },
+  emptyWrap: {
+    paddingVertical: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: ArtisanColors.surfaceContainerLowest,
+    borderRadius: 16,
+    marginVertical: 12,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(143, 112, 104, 0.15)',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ArtisanColors.onSurface,
+    marginTop: 4,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: ArtisanColors.secondary,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

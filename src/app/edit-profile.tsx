@@ -15,7 +15,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { MOCK_USER } from '@/constants/mock-data';
 import { ArtisanColors } from '@/constants/theme';
 import { useUserProfile } from '@/features/user';
 
@@ -23,16 +22,14 @@ export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, profile, isLoading, updateProfile } = useUserProfile();
 
-  const [lastName, setLastName] = useState('Nguyễn Hoàng');
-  const [firstName, setFirstName] = useState('Minh');
-  const [username, setUsername] = useState('alexmorgan99');
-  const [email, setEmail] = useState('alex.morgan@email.com');
-  const [phone, setPhone] = useState('+84 908 123 456');
-  const [dob, setDob] = useState('24/10/1995');
+  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [dob, setDob] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | 'other'>('male');
-  const [address, setAddress] = useState(
-    '128 Nguyễn Du, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh'
-  );
+  const [address, setAddress] = useState('');
   const [isDefaultAddress, setIsDefaultAddress] = useState(true);
 
   useEffect(() => {
@@ -49,6 +46,7 @@ export default function EditProfileScreen() {
         if (profile.phone) setPhone(profile.phone);
         if (profile.dateOfBirth) setDob(profile.dateOfBirth);
         if (profile.address) setAddress(profile.address);
+        if (profile.gender !== undefined) setGender(profile.gender ? 'male' : 'female');
       }
     }
     populate();
@@ -89,9 +87,38 @@ export default function EditProfileScreen() {
   };
 
   const handleUseCurrentLocation = () => {
-    setAddress('Tòa nhà Bitexco, 2 Hải Triều, Bến Nghé, Quận 1, TP. Hồ Chí Minh');
-    Alert.alert('Đã cập nhật vị trí', 'Đã lấy địa chỉ hiện tại của bạn thành công.');
+    if (profile?.address) {
+      setAddress(profile.address);
+      Alert.alert('Vị trí', 'Đã tải địa chỉ hiện tại đã lưu của bạn.');
+    } else {
+      Alert.alert('Vị trí', 'Vui lòng nhập địa chỉ của bạn vào ô địa chỉ.');
+    }
   };
+
+  if (isLoading && !user) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.topHeader}>
+          <Pressable
+            accessibilityLabel="Quay lại"
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
+            <Icon name="arrow_back" size={24} color={ArtisanColors.onSurface} />
+          </Pressable>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            Chỉnh sửa thông tin cá nhân
+          </Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          <ActivityIndicator size="large" color={ArtisanColors.primary} />
+          <Text style={{ fontSize: 14, color: ArtisanColors.secondary, fontWeight: '600' }}>
+            Đang tải thông tin cá nhân...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -123,17 +150,24 @@ export default function EditProfileScreen() {
         <View style={styles.avatarSection}>
           <View style={styles.avatarWrapper}>
             <View style={styles.avatarRing}>
-              <Image
-                source={{ uri: MOCK_USER.avatar }}
-                style={styles.avatarImage}
-                contentFit="cover"
-                transition={200}
-              />
+              <View
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: 40,
+                  backgroundColor: ArtisanColors.primary,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <Text style={{ fontSize: 32, fontWeight: '800', color: '#ffffff' }}>
+                  {username ? username.charAt(0).toUpperCase() : 'U'}
+                </Text>
+              </View>
             </View>
             <Pressable
               accessibilityLabel="Thay đổi ảnh đại diện"
               onPress={() =>
-                Alert.alert('Đổi ảnh đại diện', 'Chọn ảnh từ thư viện hoặc chụp ảnh mới.')
+                Alert.alert('Đổi ảnh đại diện', 'Tính năng đang được phát triển.')
               }
               style={styles.cameraBadgeBtn}>
               <Icon name="photo_camera" size={18} color="#ffffff" />

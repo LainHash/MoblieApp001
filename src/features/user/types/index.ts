@@ -3,6 +3,7 @@ export interface UserAccountResponse {
   userName: string;
   email: string;
   roleName: string;
+  personalProfile?: PersonalProfileResponse | null;
 }
 
 export interface PersonalProfileResponse {

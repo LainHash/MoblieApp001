@@ -17,12 +17,12 @@ interface TopHeaderProps {
 }
 
 export function TopHeader({
-  title = 'Chi nhánh Trung tâm',
+  title = 'Artisan Kitchen',
   showBack = false,
   showBranch = true,
   showNotifications = true,
   showCart = false,
-  cartCount = 2,
+  cartCount = 0,
   rightAction,
   onBackPress,
 }: TopHeaderProps) {
